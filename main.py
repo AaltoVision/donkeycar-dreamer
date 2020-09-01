@@ -77,7 +77,7 @@ parser.add_argument('--render', action='store_true', help='Render environment')
 parser.add_argument('--pcont', action='store_true', help='Wheter to predict the continuity, used to handle the terminal state')
 parser.add_argument('--pcont_scale', type=int, default=10, help='The coefficient term of the pcont loss')
 # For donkey car
-parser.add_argument('--sim_path', type=str, default='../donkey/DonkeySimLinux/donkey_sim.x86_64', help='path to the unity simulator, a .x86_64 file.')
+parser.add_argument('--sim_path', type=str, default='/u/95/zhaoy13/unix/summer/ICRA/donkey/DonkeySimLinux/donkey_sim.x86_64', help='path to the unity simulator, a .x86_64 file.')
 parser.add_argument('--port', type=int, default=9091, help='port to use for tcp')
 parser.add_argument('--host', type=str, default='127.0.0.1', help='host ip')
 
