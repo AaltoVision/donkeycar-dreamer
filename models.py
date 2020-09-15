@@ -57,7 +57,7 @@ class TransitionModel(nn.Module):
     # Loop over time sequence
     for t in range(T - 1):
       _state = prior_states[t] if observations is None else posterior_states[t]  # Select appropriate previous state
-      _state = _state if nonterminals is None else _state * nonterminals[t].unsqueeze(dim=-1)  # Mask if previous transition was terminal
+      _state = _state if nonterminals is None else _state * nonterminals[t].unsqueeze(dim=-1)  # Mask if previous transition was terminal  # TODO Check its usage
       # Compute belief (deterministic hidden state)
       hidden = self.act_fn(self.fc_embed_state_action(torch.cat([_state, actions[t]], dim=1)))
       beliefs[t + 1] = self.rnn(hidden, beliefs[t])
@@ -219,8 +219,9 @@ class ActorModel(nn.Module):
     self.fc2 = nn.Linear(hidden_size, hidden_size)
     self.fc3 = nn.Linear(hidden_size, hidden_size)
     self.fc4 = nn.Linear(hidden_size, hidden_size)
-    self.fc5 = nn.Linear(hidden_size, 2 * (action_size-1)) # TODO: only predict the direction, remove this latter
-    # self.fc5 = nn.Linear(hidden_size, 2 * (action_size))
+
+    # self.fc5 = nn.Linear(hidden_size, 2 * (action_size-1)) # TODO: only predict the direction, remove this latter
+    self.fc5 = nn.Linear(hidden_size, 2 * (action_size))
     self.min_std = min_std
     self.init_std = init_std
     self.mean_scale = mean_scale
@@ -238,33 +239,35 @@ class ActorModel(nn.Module):
     # hidden = self.act_fn(self.fc4(hidden))
     hidden = self.fc5(hidden)
     mean, std = torch.chunk(hidden, 2, dim=-1) 
-  
-    mean = self.mean_scale * torch.tanh(mean / self.mean_scale)  # bound the action to [-5, 5] --> to avoid numerical instabilities.  For computing log-probabilities, we need to invert the tanh and this becomes difficult in highly saturated regions.
-    speed = torch.full(mean.shape, 0.5).to("cuda")
-    mean = torch.cat((mean, speed), -1)
-
-    std = F.softplus(std + raw_init_std) + self.min_std
-    
-    speed = torch.full(std.shape, 0.0).to("cuda")
-    std = torch.cat((std, speed), -1)
-
-    dist = torch.distributions.Normal(mean, std)
-    transform = [torch.distributions.transforms.TanhTransform()]
-    dist = torch.distributions.TransformedDistribution(dist, transform)
-    dist = torch.distributions.independent.Independent(dist, 1)  # Introduces dependence between actions dimension
-    dist = SampleDist(dist)  # because after transform a distribution, some methods may become invalid, such as entropy, mean and mode, we need SmapleDist to approximate it.
-    return dist  # dist ~ tanh(Normal(mean, std)); remember when sampling, using rsample() to adopt the reparameterization trick
 
 
+    # # ---------
     # mean = self.mean_scale * torch.tanh(mean / self.mean_scale)  # bound the action to [-5, 5] --> to avoid numerical instabilities.  For computing log-probabilities, we need to invert the tanh and this becomes difficult in highly saturated regions.
+    # speed = torch.full(mean.shape, 0.3).to("cuda")
+    # mean = torch.cat((mean, speed), -1)
+    #
     # std = F.softplus(std + raw_init_std) + self.min_std
-
+    #
+    # speed = torch.full(std.shape, 0.0).to("cuda")
+    # std = torch.cat((std, speed), -1)
+    #
     # dist = torch.distributions.Normal(mean, std)
     # transform = [torch.distributions.transforms.TanhTransform()]
     # dist = torch.distributions.TransformedDistribution(dist, transform)
     # dist = torch.distributions.independent.Independent(dist, 1)  # Introduces dependence between actions dimension
     # dist = SampleDist(dist)  # because after transform a distribution, some methods may become invalid, such as entropy, mean and mode, we need SmapleDist to approximate it.
     # return dist  # dist ~ tanh(Normal(mean, std)); remember when sampling, using rsample() to adopt the reparameterization trick
+
+
+    mean = self.mean_scale * torch.tanh(mean / self.mean_scale)  # bound the action to [-5, 5] --> to avoid numerical instabilities.  For computing log-probabilities, we need to invert the tanh and this becomes difficult in highly saturated regions.
+    std = F.softplus(std + raw_init_std) + self.min_std
+
+    dist = torch.distributions.Normal(mean, std)
+    transform = [torch.distributions.transforms.TanhTransform(), torch.distributions.transforms.AffineTransform(loc=0.0, scale=torch.tensor([1.0, 0.3]).to("cuda"))]  # TODO: this is limited at donkeycar env
+    dist = torch.distributions.TransformedDistribution(dist, transform)
+    dist = torch.distributions.independent.Independent(dist, 1)  # Introduces dependence between actions dimension
+    dist = SampleDist(dist)  # because after transform a distribution, some methods may become invalid, such as entropy, mean and mode, we need SmapleDist to approximate it.
+    return dist  # dist ~ tanh(Normal(mean, std)); remember when sampling, using rsample() to adopt the reparameterization trick
 
 
 

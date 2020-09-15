@@ -158,7 +158,7 @@ class DonkeyCarEnv():
         "country" : "Fi",
         "bio" : "Learning to drive w Dreamer",
 
-        "max_cte" : 10,
+        "max_cte" : 3,
         }
     self._env = gym.make(env, conf=self.donkey_conf)
     self._env.seed(seed)

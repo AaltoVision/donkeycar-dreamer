@@ -11,6 +11,7 @@ from torchvision.utils import make_grid, save_image
 from tqdm import tqdm
 from env import CONTROL_SUITE_ENVS, Env, GYM_ENVS, DONKEY_CAR_ENVS, EnvBatcher
 from memory import ExperienceReplay
+# from buffer import ExperienceReplay
 from models import bottle, Encoder, ObservationModel, RewardModel, TransitionModel, ValueModel, ActorModel, PCONTModel
 from utils import lineplot, write_video, cal_returns
 from tensorboardX import SummaryWriter
@@ -41,8 +42,8 @@ parser.add_argument('--seed-episodes', type=int, default=5, metavar='S', help='S
 
 parser.add_argument('--collect-interval', type=int, default=100, metavar='C', help='Collect interval')
 
-parser.add_argument('--batch-size', type=int, default=150, metavar='B', help='Batch size')
-parser.add_argument('--chunk-size', type=int, default=15, metavar='L', help='Chunk size')
+parser.add_argument('--batch-size', type=int, default=50, metavar='B', help='Batch size')
+parser.add_argument('--chunk-size', type=int, default=50, metavar='L', help='Chunk size')
 
 parser.add_argument('--worldmodel-LogProbLoss', action='store_true', help='use LogProb loss for observation_model and reward_model training')
 parser.add_argument('--overshooting-distance', type=int, default=50, metavar='D', help='Latent overshooting distance/latent overshooting weight for t = 1')
@@ -59,9 +60,12 @@ parser.add_argument('--adam-epsilon', type=float, default=1e-7, metavar='ε', he
 # Note that original has a linear learning rate decay, but it seems unlikely that this makes a significant difference
 parser.add_argument('--grad-clip-norm', type=float, default=100.0, metavar='C', help='Gradient clipping norm')
 parser.add_argument('--expl_amount', type=float, default=0.3, help='exploration noise')
-parser.add_argument('--planning-horizon', type=int, default=10, metavar='H', help='Planning horizon distance')
-parser.add_argument('--discount', type=float, default=0.95, metavar='H', help='Planning horizon distance')
+
+parser.add_argument('--planning-horizon', type=int, default=15, metavar='H', help='Planning horizon distance')
+
+parser.add_argument('--discount', type=float, default=0.99, metavar='H', help='Planning horizon distance')
 parser.add_argument('--disclam', type=float, default=0.95, metavar='H', help='discount rate to compute return')
+
 parser.add_argument('--optimisation-iters', type=int, default=10, metavar='I', help='Planning optimisation iterations')
 parser.add_argument('--candidates', type=int, default=1000, metavar='J', help='Candidate samples per iteration')
 parser.add_argument('--top-candidates', type=int, default=100, metavar='K', help='Number of top candidates to fit')
@@ -83,6 +87,10 @@ parser.add_argument('--host', type=str, default='127.0.0.1', help='host ip')
 
 args = parser.parse_args()
 args.overshooting_distance = min(args.chunk_size, args.overshooting_distance)  # Overshooting distance cannot be greater than chunk size
+
+# # set the pcont
+# if args.env in DONKEY_CAR_ENVS:
+#   args.pcont = True
 
 print(' ' * 26 + 'Options')
 for k, v in vars(args).items():
@@ -113,7 +121,8 @@ if args.experience_replay is not '' and os.path.exists(args.experience_replay):
   D = torch.load(args.experience_replay)
   metrics['steps'], metrics['episodes'] = [D.steps] * D.episodes, list(range(1, D.episodes + 1))
 elif not args.test:
-  D = ExperienceReplay(args.experience_size, args.symbolic, env.observation_size, env.action_size, args.bit_depth, args.device)
+  D = ExperienceReplay(args.experience_size, args.symbolic, env.observation_size, env.action_size, args.bit_depth, args.device)  #TODO: add env in the argument list
+
   # Initialise dataset D with S random seed episodes
   for s in range(1, args.seed_episodes + 1):
     observation, done, t = env.reset(), False, 0
@@ -175,7 +184,7 @@ pcont_model = PCONTModel(
   args.hidden_size, 
   args.dense_act).to(device=args.device)
 
-world_param = list(transition_model.parameters()) + list(observation_model.parameters())  + list(reward_model.parameters())  + list(encoder.parameters())
+world_param = list(transition_model.parameters()) + list(observation_model.parameters()) + list(reward_model.parameters()) + list(encoder.parameters())
 if args.pcont:
   world_param += list(pcont_model.parameters())
 
@@ -202,9 +211,10 @@ def update_belief_and_act(args, env, actor_model, transition_model, encoder, bel
     action.unsqueeze(dim=0), 
     belief, 
     encoder(observation).unsqueeze(dim=0))  # Action and observation need extra time dimension
-  
+
   belief, posterior_state = belief.squeeze(dim=0), posterior_state.squeeze(dim=0)  # Remove time dimension from belief/state
-  
+
+
   if explore:
     action = actor_model(belief, posterior_state).rsample()  # batch_shape=1, event_shape=6
     # add exploration noise -- following the original code: line 275-280
@@ -214,8 +224,10 @@ def update_belief_and_act(args, env, actor_model, transition_model, encoder, bel
     # action = torch.clamp(action, [-1.0, 0.0], [1.0, 5.0])
   else:
     action = actor_model(belief, posterior_state).mode()
+  action[:, 1] = 0.3  # TODO: fix the speed
   next_observation, reward, done = env.step(action.cpu() if isinstance(env, EnvBatcher) else action[0].cpu())  # Perform environment step (action repeats handled internally)
-  action[:,1] = 0.5  # TODO: fix the speed
+
+  # print(reward, bottle(value_model, (belief.unsqueeze(dim=0), posterior_state.unsqueeze(dim=0))).item())
   return belief, posterior_state, action, next_observation, reward, done
 
 
@@ -265,7 +277,8 @@ for episode in tqdm(range(metrics['episodes'][-1] + 1, args.episodes + 1), total
 
   for s in tqdm(range(args.collect_interval)):
     # Draw sequence chunks {(o_t, a_t, r_t+1, terminal_t+1)} ~ D uniformly at random from the dataset (including terminal flags)
-    observations, actions, rewards, nonterminals = D.sample(args.batch_size, args.chunk_size) # Transitions start at time t = 0
+    observations, actions, rewards, nonterminals = D.sample(args.batch_size, args.chunk_size) # Transitions start at time t = 01
+    # print("data shape check", observations.shape, actions.shape, rewards.shape, nonterminals.shape)
     """world model update"""
     init_belief = torch.zeros(args.batch_size, args.belief_size, device=args.device)
     init_state = torch.zeros(args.batch_size, args.state_size, device=args.device)
@@ -285,7 +298,7 @@ for episode in tqdm(range(metrics['episodes'][-1] + 1, args.episodes + 1), total
 
     reward_loss = F.mse_loss(
       bottle(reward_model, (beliefs, posterior_states)), 
-      rewards[:-1], 
+      rewards[1:],
       reduction='none').mean(dim=(0,1))
 
     # transition loss
