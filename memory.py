@@ -30,6 +30,8 @@ class ExperienceReplay():
     self.full = self.full or self.idx == 0
     self.steps, self.episodes = self.steps + 1, self.episodes + (1 if done else 0)
 
+
+
   # Returns an index for a valid single sequence chunk uniformly sampled from the memory
   def _sample_idx(self, L):
     valid_idx = False
