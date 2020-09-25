@@ -158,7 +158,7 @@ class DonkeyCarEnv():
         "country" : "Fi",
         "bio" : "Learning to drive w Dreamer",
 
-        "max_cte" : 3,
+        "max_cte" : 5,
         }
     self._env = gym.make(env, conf=self.donkey_conf)
     self._env.seed(seed)
@@ -180,13 +180,12 @@ class DonkeyCarEnv():
     action = action.detach().numpy()
     reward = 0
     for k in range(self.action_repeat):
-      # TODO: force the speed to be 0.7, remove this latter
-      # action[1] = 0.7
-      state, reward_k, done, _ = self._env.step(action)
+      state, reward_k, done, info = self._env.step(action)
       reward += reward_k
       self.t += 1  # Increment internal timer
       # done = done or self.t == self.max_episode_length
       if done:
+        print("done", info)
         break
     # if self.symbolic:
     #   observation = torch.tensor(state, dtype=torch.float32).unsqueeze(dim=0)
