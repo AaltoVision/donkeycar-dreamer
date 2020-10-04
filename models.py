@@ -139,7 +139,7 @@ class RewardModel(jit.ScriptModule):
   def forward(self, belief, state):
     x = torch.cat([belief, state],dim=1)
     hidden = self.act_fn(self.fc1(x))
-    # hidden = self.act_fn(self.fc2(hidden))
+    hidden = self.act_fn(self.fc2(hidden))
     reward = self.fc3(hidden)
     reward = reward.squeeze(dim=-1)
     return reward
@@ -158,8 +158,8 @@ class ValueModel(jit.ScriptModule):
   def forward(self, belief, state):
     x = torch.cat([belief, state],dim=1)
     hidden = self.act_fn(self.fc1(x))
-    # hidden = self.act_fn(self.fc2(hidden))
-    # hidden = self.act_fn(self.fc3(hidden))
+    hidden = self.act_fn(self.fc2(hidden))
+    hidden = self.act_fn(self.fc3(hidden))
     reward = self.fc4(hidden).squeeze(dim=1)
     return reward
 
@@ -226,48 +226,85 @@ class ActorModel(nn.Module):
     self.init_std = init_std
     self.mean_scale = mean_scale
 
-  def forward(self, belief, state, training=True):
-    """
-    :param training: when training, returned action is reparametrized sample;
-                    otherwise, it will be the mean of policy distribution
-    :return: selected action
-    """
-    raw_init_std = np.log(np.exp(self.init_std) - 1)
+  def forward(self, belief, state, deterministic=False, with_logprob=False):
     hidden = self.act_fn(self.fc1(torch.cat([belief, state], dim=-1)))
+    # print("first hidden", hidden[0][1], self.fc1.weight[1])
     hidden = self.act_fn(self.fc2(hidden))
-    # hidden = self.act_fn(self.fc3(hidden))
-    # hidden = self.act_fn(self.fc4(hidden))
+    hidden = self.act_fn(self.fc3(hidden))
+    hidden = self.act_fn(self.fc4(hidden))
+    # print("middle hidden", self.fc4.weight)
     hidden = self.fc5(hidden)
-    mean, std = torch.chunk(hidden, 2, dim=-1) 
 
-
-    # # ---------
-    # mean = self.mean_scale * torch.tanh(mean / self.mean_scale)  # bound the action to [-5, 5] --> to avoid numerical instabilities.  For computing log-probabilities, we need to invert the tanh and this becomes difficult in highly saturated regions.
-    # speed = torch.full(mean.shape, 0.3).to("cuda")
-    # mean = torch.cat((mean, speed), -1)
-    #
-    # std = F.softplus(std + raw_init_std) + self.min_std
-    #
-    # speed = torch.full(std.shape, 0.0).to("cuda")
-    # std = torch.cat((std, speed), -1)
-    #
-    # dist = torch.distributions.Normal(mean, std)
-    # transform = [torch.distributions.transforms.TanhTransform()]
-    # dist = torch.distributions.TransformedDistribution(dist, transform)
-    # dist = torch.distributions.independent.Independent(dist, 1)  # Introduces dependence between actions dimension
-    # dist = SampleDist(dist)  # because after transform a distribution, some methods may become invalid, such as entropy, mean and mode, we need SmapleDist to approximate it.
-    # return dist  # dist ~ tanh(Normal(mean, std)); remember when sampling, using rsample() to adopt the reparameterization trick
-
-
-    mean = self.mean_scale * torch.tanh(mean / self.mean_scale)  # bound the action to [-5, 5] --> to avoid numerical instabilities.  For computing log-probabilities, we need to invert the tanh and this becomes difficult in highly saturated regions.
+    raw_init_std = np.log(np.exp(self.init_std) - 1)
+    mean, std = torch.chunk(hidden, 2, dim=-1)
+    mean = self.mean_scale * torch.tanh(
+      mean / self.mean_scale)  # bound the action to [-5, 5] --> to avoid numerical instabilities.  For computing log-probabilities, we need to invert the tanh and this becomes difficult in highly saturated regions.
     std = F.softplus(std + raw_init_std) + self.min_std
+    pi_dist = torch.distributions.Normal(mean, std)
 
-    dist = torch.distributions.Normal(mean, std)
-    transform = [torch.distributions.transforms.TanhTransform(), torch.distributions.transforms.AffineTransform(loc=0.0, scale=torch.tensor([1.0, 0.3]).to("cuda"))]  # TODO: this is limited at donkeycar env
-    dist = torch.distributions.TransformedDistribution(dist, transform)
-    dist = torch.distributions.independent.Independent(dist, 1)  # Introduces dependence between actions dimension
-    dist = SampleDist(dist)  # because after transform a distribution, some methods may become invalid, such as entropy, mean and mode, we need SmapleDist to approximate it.
-    return dist  # dist ~ tanh(Normal(mean, std)); remember when sampling, using rsample() to adopt the reparameterization trick
+    # mean, log_std = torch.chunk(hidden, 2, dim=-1)
+    # log_std = torch.clamp(log_std, self.LOG_STD_MIN, self.LOG_STD_MAX)
+    # std = torch.exp(log_std)
+
+    # pi_dist = torch.distributions.Normal(mean, std)
+
+    if deterministic:
+      pi_action = mean
+    else:
+      pi_action = pi_dist.rsample()  # shape [batch*(chunk-1), act_dim]
+
+    if with_logprob:
+      logp_pi = pi_dist.log_prob(pi_action).sum(axis=-1)  # shape [batch*(chunk-1)]
+      # print("check action.shape", pi_action.shape)
+      # print("logp.shape", logp_pi.shape)
+      # print("before sum(axis=1)", (2*(np.log(2) - pi_action - F.softplus(-2*pi_action))).shape)
+      logp_pi -= (2 * (np.log(2) - pi_action - F.softplus(-2 * pi_action))).sum(axis=1)
+    else:
+      logp_pi = None
+    pi_action = torch.tanh(pi_action)
+
+    if with_logprob:
+      return pi_action, logp_pi
+    else:
+      return pi_action
+
+
+  # def forward(self, belief, state, training=True):
+  #   raw_init_std = np.log(np.exp(self.init_std) - 1)
+  #   hidden = self.act_fn(self.fc1(torch.cat([belief, state], dim=-1)))
+  #   hidden = self.act_fn(self.fc2(hidden))
+  #   hidden = self.act_fn(self.fc3(hidden))
+  #   hidden = self.act_fn(self.fc4(hidden))
+  #   hidden = self.fc5(hidden)
+  #   mean, std = torch.chunk(hidden, 2, dim=-1)
+  #
+  #   # # ---------
+  #   # mean = self.mean_scale * torch.tanh(mean / self.mean_scale)  # bound the action to [-5, 5] --> to avoid numerical instabilities.  For computing log-probabilities, we need to invert the tanh and this becomes difficult in highly saturated regions.
+  #   # speed = torch.full(mean.shape, 0.3).to("cuda")
+  #   # mean = torch.cat((mean, speed), -1)
+  #   #
+  #   # std = F.softplus(std + raw_init_std) + self.min_std
+  #   #
+  #   # speed = torch.full(std.shape, 0.0).to("cuda")
+  #   # std = torch.cat((std, speed), -1)
+  #   #
+  #   # dist = torch.distributions.Normal(mean, std)
+  #   # transform = [torch.distributions.transforms.TanhTransform()]
+  #   # dist = torch.distributions.TransformedDistribution(dist, transform)
+  #   # dist = torch.distributions.independent.Independent(dist, 1)  # Introduces dependence between actions dimension
+  #   # dist = SampleDist(dist)  # because after transform a distribution, some methods may become invalid, such as entropy, mean and mode, we need SmapleDist to approximate it.
+  #   # return dist  # dist ~ tanh(Normal(mean, std)); remember when sampling, using rsample() to adopt the reparameterization trick
+  #
+  #
+  #   mean = self.mean_scale * torch.tanh(mean / self.mean_scale)  # bound the action to [-5, 5] --> to avoid numerical instabilities.  For computing log-probabilities, we need to invert the tanh and this becomes difficult in highly saturated regions.
+  #   std = F.softplus(std + raw_init_std) + self.min_std
+  #
+  #   dist = torch.distributions.Normal(mean, std)
+  #   transform = [torch.distributions.transforms.TanhTransform(), torch.distributions.transforms.AffineTransform(loc=0.0, scale=torch.tensor([1.0, 0.3]).to("cuda"))]  # TODO: this is limited at donkeycar env
+  #   dist = torch.distributions.TransformedDistribution(dist, transform)
+  #   dist = torch.distributions.independent.Independent(dist, 1)  # Introduces dependence between actions dimension
+  #   dist = SampleDist(dist)  # because after transform a distribution, some methods may become invalid, such as entropy, mean and mode, we need SmapleDist to approximate it.
+  #   return dist  # dist ~ tanh(Normal(mean, std)); remember when sampling, using rsample() to adopt the reparameterization trick
 
 
 
@@ -323,8 +360,8 @@ class PCONTModel(nn.Module):
   def forward(self, belief, state):
     x = torch.cat([belief, state],dim=1)
     hidden = self.act_fn(self.fc1(x))
-    # hidden = self.act_fn(self.fc2(hidden))
-    # hidden = self.act_fn(self.fc3(hidden))
+    hidden = self.act_fn(self.fc2(hidden))
+    hidden = self.act_fn(self.fc3(hidden))
     x = self.fc4(hidden).squeeze(dim=1)
     # The output is a binary distribution
     return x
