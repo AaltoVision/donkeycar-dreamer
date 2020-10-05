@@ -16,6 +16,7 @@ from memory import ExperienceReplay
 from models import bottle, Encoder, ObservationModel, RewardModel, TransitionModel, ValueModel, ActorModel, PCONTModel
 from utils import lineplot, write_video, cal_returns
 from tensorboardX import SummaryWriter
+import wandb
 
 
 # Hyperparameters
@@ -87,11 +88,13 @@ parser.add_argument('--port', type=int, default=9091, help='port to use for tcp'
 parser.add_argument('--host', type=str, default='127.0.0.1', help='host ip')
 # por sac
 parser.add_argument('--polyak', type=float, default=0.9)
-parser.add_argument('--temp', type=float, default=0.2)
+parser.add_argument('--temp', type=float, default=1)
 
 args = parser.parse_args()
 args.overshooting_distance = min(args.chunk_size, args.overshooting_distance)  # Overshooting distance cannot be greater than chunk size
 
+wandb.init(project="donkey_sac")
+wandb.config.update(args)
 # # set the pcont
 # if args.env in DONKEY_CAR_ENVS:
 #   args.pcont = True
@@ -198,10 +201,10 @@ pcont_model = PCONTModel(
 target_value_model1 = deepcopy(value_model1)
 for p in target_value_model1.parameters():
   p.requires_grad = False
-#
-# target_value_model2 = deepcopy(value_model2)
-# for p in target_value_model2.parameters():
-#   p.requires_grad = False
+
+target_value_model2 = deepcopy(value_model2)
+for p in target_value_model2.parameters():
+  p.requires_grad = False
 
 
 world_param = list(transition_model.parameters()) + list(observation_model.parameters()) + list(reward_model.parameters()) + list(encoder.parameters())
@@ -417,14 +420,13 @@ for episode in tqdm(range(metrics['episodes'][-1] + 1, args.episodes + 1), total
     imag_states = imag_states.detach()
 
     # calculate the target with the target nn
-    # target_return = returns.detach()
-    # target_imag_value1 = bottle(target_value_model1, (imag_beliefs, imag_states))
-    # target_imag_value2 = bottle(target_value_model2, (imag_beliefs, imag_states))
-    # target_imag_value = torch.min(target_imag_value1, target_imag_value2) # use the smaller value to avoid overfitting
-    #
-    # # print("check shape", target_imag_value[:-1].shape, imag_ac_logps.shape)
-    # target_imag_value[1:] -= args.temp * imag_ac_logps
-    # returns = cal_returns(imag_reward[:-1], target_imag_value[:-1], target_imag_value[-1], pcont[:-1], lambda_=args.disclam)
+    target_imag_value1 = bottle(target_value_model1, (imag_beliefs, imag_states))
+    target_imag_value2 = bottle(target_value_model2, (imag_beliefs, imag_states))
+    target_imag_value = torch.min(target_imag_value1, target_imag_value2) # use the smaller value to avoid overfitting
+
+    # print("check shape", target_imag_value[:-1].shape, imag_ac_logps.shape)
+    target_imag_value[1:] -= args.temp * imag_ac_logps
+    returns = cal_returns(imag_reward[:-1], target_imag_value[:-1], target_imag_value[-1], pcont[:-1], lambda_=args.disclam)
     target_return = returns.detach()
 
     value_pred1 = bottle(value_model1, (imag_beliefs, imag_states))[:-1]
@@ -441,14 +443,14 @@ for episode in tqdm(range(metrics['episodes'][-1] + 1, args.episodes + 1), total
     value_optimizer.step()
 
     """update target value function """
-    # with torch.no_grad():
-    #   for p, p_target in zip(value_model1.parameters(), target_value_model1.parameters()):
-    #     p_target.data.mul_(args.polyak)
-    #     p_target.data.add_((1 - args.polyak) * p.data)
-    #
-    #   for p, p_target in zip(value_model2.parameters(), target_value_model2.parameters()):
-    #     p_target.data.mul_(args.polyak)
-    #     p_target.data.add_((1 - args.polyak) * p.data)
+    with torch.no_grad():
+      for p, p_target in zip(value_model1.parameters(), target_value_model1.parameters()):
+        p_target.data.mul_(args.polyak)
+        p_target.data.add_((1 - args.polyak) * p.data)
+
+      for p, p_target in zip(value_model2.parameters(), target_value_model2.parameters()):
+        p_target.data.mul_(args.polyak)
+        p_target.data.add_((1 - args.polyak) * p.data)
 
     losses.append([observation_loss.item(), reward_loss.item(), kl_loss.item(), actor_loss.item(), value_loss.item()])
 
@@ -597,7 +599,7 @@ for episode in tqdm(range(metrics['episodes'][-1] + 1, args.episodes + 1), total
   writer.add_scalar("actor_loss", metrics['actor_loss'][0][-1], metrics['steps'][-1])
   writer.add_scalar("value_loss", metrics['value_loss'][0][-1], metrics['steps'][-1])  
   print("episodes: {}, total_steps: {}, train_reward: {} ".format(metrics['episodes'][-1], metrics['steps'][-1], metrics['train_rewards'][-1]))
-
+  wandb.log({"episode": episode, "cumulative_reward": total_reward})
   # Checkpoint models
   if episode % args.checkpoint_interval == 0:
     torch.save({'transition_model': transition_model.state_dict(),
