@@ -158,7 +158,7 @@ class DonkeyCarEnv():
         "country" : "Fi",
         "bio" : "Learning to drive w Dreamer",
 
-        "max_cte" : 5,
+        "max_cte" : 4,
         }
     self._env = gym.make(env, conf=self.donkey_conf)
     self._env.seed(seed)
@@ -185,7 +185,7 @@ class DonkeyCarEnv():
       self.t += 1  # Increment internal timer
       # done = done or self.t == self.max_episode_length
       if done:
-        print("done", info)
+        # print("done", info)
         break
     # if self.symbolic:
     #   observation = torch.tensor(state, dtype=torch.float32).unsqueeze(dim=0)

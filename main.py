@@ -38,7 +38,7 @@ parser.add_argument('--state-size', type=int, default=30, metavar='Z', help='Sta
 parser.add_argument('--action-repeat', type=int, default=1, metavar='R', help='Action repeat')
 
 parser.add_argument('--action-noise', type=float, default=0.3, metavar='ε', help='Action noise')
-parser.add_argument('--episodes', type=int, default=1000, metavar='E', help='Total number of episodes')
+parser.add_argument('--episodes', type=int, default=50, metavar='E', help='Total number of episodes')
 
 parser.add_argument('--seed-episodes', type=int, default=5, metavar='S', help='Seed episodes')
 
@@ -87,6 +87,7 @@ parser.add_argument('--sim_path', type=str, default='/u/95/zhaoy13/unix/summer/I
 parser.add_argument('--port', type=int, default=9091, help='port to use for tcp')
 parser.add_argument('--host', type=str, default='127.0.0.1', help='host ip')
 # por sac
+parser.add_argument('--use_entropy', action='store_true', help="Use the entropy regularization")
 parser.add_argument('--polyak', type=float, default=0.9)
 parser.add_argument('--temp', type=float, default=1)
 
@@ -249,10 +250,12 @@ def update_belief_and_act(args, env, actor_model, transition_model, encoder, bel
   # else:
   #   action = actor_model(belief, posterior_state).mode()
   action = actor_model(belief, posterior_state, deterministic=deterministic, with_logprob=False)  # with sac, not need to add exploration noise, the max entropy can maintain it.
+  if args.use_entropy and not deterministic:
+    action = Normal(action, args.expl_amount).rsample()
   action[:, 1] = 0.3  # TODO: fix the speed
   next_observation, reward, done = env.step(action.cpu() if isinstance(env, EnvBatcher) else action[0].cpu())  # Perform environment step (action repeats handled internally)
 
-  # print(reward, bottle(value_model, (belief.unsqueeze(dim=0), posterior_state.unsqueeze(dim=0))).item())
+  # print(bottle(value_model1, (belief.unsqueeze(dim=0), posterior_state.unsqueeze(dim=0))).item())
   return belief, posterior_state, action, next_observation, reward, done
 
 
@@ -393,7 +396,8 @@ for episode in tqdm(range(metrics['episodes'][-1] + 1, args.episodes + 1), total
     else:
       pcont = args.discount * torch.ones_like(imag_reward)
 
-    imag_value[1:] -= args.temp * imag_ac_logps  # add entropy here
+    if args.use_entropy:
+      imag_value[1:] -= args.temp * imag_ac_logps  # add entropy here
     # print(pcont)
     returns = cal_returns(imag_reward[:-1], imag_value[:-1], imag_value[-1], pcont[:-1], lambda_=args.disclam)
 
@@ -425,7 +429,8 @@ for episode in tqdm(range(metrics['episodes'][-1] + 1, args.episodes + 1), total
     target_imag_value = torch.min(target_imag_value1, target_imag_value2) # use the smaller value to avoid overfitting
 
     # print("check shape", target_imag_value[:-1].shape, imag_ac_logps.shape)
-    target_imag_value[1:] -= args.temp * imag_ac_logps
+    if args.use_entropy:
+      target_imag_value[1:] -= args.temp * imag_ac_logps
     returns = cal_returns(imag_reward[:-1], target_imag_value[:-1], target_imag_value[-1], pcont[:-1], lambda_=args.disclam)
     target_return = returns.detach()
 
@@ -589,7 +594,7 @@ for episode in tqdm(range(metrics['episodes'][-1] + 1, args.episodes + 1), total
     value_model2.train()
     # Close test environments
     # test_envs.close()
-    env.close()
+    # env.close()
 
   writer.add_scalar("train_reward", metrics['train_rewards'][-1], metrics['steps'][-1])
   writer.add_scalar("train/episode_reward", metrics['train_rewards'][-1], metrics['steps'][-1]*args.action_repeat)
