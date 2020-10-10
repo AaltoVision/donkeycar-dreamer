@@ -162,16 +162,10 @@ observation_model = ObservationModel(
   args.embedding_size, 
   activation_function=(args.dense_act if args.symbolic else args.cnn_act)).to(device=args.device)
 
-reward_model1 = RewardModel(
+reward_model = RewardModel(
   args.belief_size, 
   args.state_size, 
   args.hidden_size, 
-  args.dense_act).to(device=args.device)
-
-reward_model2 = RewardModel(
-  args.belief_size,
-  args.state_size,
-  args.hidden_size,
   args.dense_act).to(device=args.device)
 
 encoder = Encoder(
@@ -217,7 +211,7 @@ for p in target_value_model2.parameters():
 log_alpha = torch.zeros(1, requires_grad=True, device=args.device)
 target_entropy = -np.prod(env.action_size).item()  # heuristic value from SAC paper
 
-world_param = list(transition_model.parameters()) + list(observation_model.parameters()) + list(reward_model1.parameters()) + list(reward_model2.parameters()) + list(encoder.parameters())
+world_param = list(transition_model.parameters()) + list(observation_model.parameters()) + list(reward_model.parameters()) + list(encoder.parameters())
 if args.pcont:
   world_param += list(pcont_model.parameters())
 
@@ -230,7 +224,7 @@ if args.models is not '' and os.path.exists(args.models):
   model_dicts = torch.load(args.models)
   transition_model.load_state_dict(model_dicts['transition_model'])
   observation_model.load_state_dict(model_dicts['observation_model'])
-  reward_model1.load_state_dict(model_dicts['reward_model1'])
+  reward_model.load_state_dict(model_dicts['reward_model'])
   encoder.load_state_dict(model_dicts['encoder'])
   actor_model.load_state_dict(model_dicts['actor_model'])
   value_model1.load_state_dict(model_dicts['value_model1'])
@@ -273,8 +267,7 @@ def update_belief_and_act(args, env, actor_model, transition_model, encoder, bel
 if args.test:
   # Set models to eval mode
   transition_model.eval()
-  reward_model1.eval()
-  reward_model2.eval()
+  reward_model.eval()
   encoder.eval()
   with torch.no_grad():
     total_reward = 0
@@ -316,7 +309,7 @@ for episode in tqdm(range(metrics['episodes'][-1] + 1, args.episodes + 1), total
   losses = []
 
   for s in tqdm(range(args.collect_interval)):
-    # Draw sequence chunks {(o_t, a_t, r_t+1, terminal_t+1)} ~ D uniformly at random from the dataset (including terminal flags)
+    # Draw sequence chunksgit  {(o_t, a_t, r_t+1, terminal_t+1)} ~ D uniformly at random from the dataset (including terminal flags)
     observations, actions, rewards, nonterminals = D.sample(args.batch_size, args.chunk_size) # Transitions start at time t = 01
     # print("data shape check", observations.shape, actions.shape, rewards.shape, nonterminals.shape)
     """world model update"""
@@ -329,24 +322,18 @@ for episode in tqdm(range(metrics['episodes'][-1] + 1, args.episodes + 1), total
       actions[:-1], 
       init_belief, 
       bottle(encoder, (observations[1:], )),
-      nonterminals[1:])
+      nonterminals[:-1])
    
     observation_loss = F.mse_loss(
       bottle(observation_model, (beliefs, posterior_states)),
       observations[1:], 
       reduction='none').sum(dim=2 if args.symbolic else (2, 3, 4)).mean(dim=(0, 1))
 
-    reward_loss1 = F.mse_loss(
-      bottle(reward_model1, (beliefs, posterior_states)),
+    reward_loss = F.mse_loss(
+      bottle(reward_model, (beliefs, posterior_states)),
       rewards[1:],
       reduction='none').mean(dim=(0,1))
 
-    reward_loss2 = F.mse_loss(
-      bottle(reward_model2, (beliefs, posterior_states)),
-      rewards[1:],
-      reduction='none').mean(dim=(0,1))
-
-    reward_loss = reward_loss1 + reward_loss2
     # transition loss
     kl_loss = torch.max(
       kl_divergence(
@@ -405,9 +392,7 @@ for episode in tqdm(range(metrics['episodes'][-1] + 1, args.episodes + 1), total
     imag_ac_logps = torch.stack(imag_ac_logps, dim=0).to(args.device)  # shape [horizon, (chuck-1)*batch]
 
     # reward and value prediction of imagined trajectories
-    imag_reward1 = bottle(reward_model1, (imag_beliefs, imag_states))
-    imag_reward2 = bottle(reward_model2, (imag_beliefs, imag_states))
-    imag_reward = torch.min(imag_reward1, imag_reward2)
+    imag_reward = bottle(reward_model, (imag_beliefs, imag_states))
 
     imag_value1 = bottle(value_model1, (imag_beliefs, imag_states))
     imag_value2 = bottle(value_model2, (imag_beliefs, imag_states))
@@ -429,8 +414,8 @@ for episode in tqdm(range(metrics['episodes'][-1] + 1, args.episodes + 1), total
       pcont = args.discount * torch.ones_like(imag_reward)
     # print("check pcont", pcont)
     if args.temp != 0:
+      print("use entropy term")
       imag_value[1:] -= alpha * imag_ac_logps  # add entropy here
-    print(pcont)
     returns = cal_returns(imag_reward[:-1], imag_value[:-1], imag_value[-1], pcont[:-1], lambda_=args.disclam)
 
     discount = torch.cumprod(torch.cat([torch.ones_like(pcont[:1]), pcont[:-2]], 0), 0) 
@@ -461,9 +446,9 @@ for episode in tqdm(range(metrics['episodes'][-1] + 1, args.episodes + 1), total
       target_imag_value2 = bottle(target_value_model2, (imag_beliefs, imag_states))
       target_imag_value = torch.min(target_imag_value1, target_imag_value2)  # use the smaller value to avoid overfitting
 
-      # target_imag_value[1:] -= alpha * imag_ac_logps
-      returns = cal_returns(imag_reward[:-1], target_imag_value[:-1], target_imag_value[-1], pcont[:-1], lambda_=args.disclam)
-      target_return = returns.detach()
+    # target_imag_value[1:] -= alpha * imag_ac_logps
+    returns = cal_returns(imag_reward[:-1], target_imag_value[:-1], target_imag_value[-1], pcont[:-1], lambda_=args.disclam)
+    target_return = returns.detach()
 
     value_pred1 = bottle(value_model1, (imag_beliefs, imag_states))[:-1]
     value_pred2 = bottle(value_model2, (imag_beliefs, imag_states))[:-1]
@@ -546,8 +531,7 @@ for episode in tqdm(range(metrics['episodes'][-1] + 1, args.episodes + 1), total
     # Set models to eval mode
     transition_model.eval()
     observation_model.eval()
-    reward_model1.eval()
-    reward_model2.eval()
+    reward_model.eval()
     encoder.eval()
     actor_model.eval()
     value_model1.eval()
@@ -617,8 +601,7 @@ for episode in tqdm(range(metrics['episodes'][-1] + 1, args.episodes + 1), total
     # Set models to train mode
     transition_model.train()
     observation_model.train()
-    reward_model1.train()
-    reward_model2.train()
+    reward_model.train()
     encoder.train()
     actor_model.train()
     value_model1.train()
@@ -640,7 +623,7 @@ for episode in tqdm(range(metrics['episodes'][-1] + 1, args.episodes + 1), total
   if episode % args.checkpoint_interval == 0:
     torch.save({'transition_model': transition_model.state_dict(),
                 'observation_model': observation_model.state_dict(),
-                'reward_model1': reward_model1.state_dict(),
+                'reward_model': reward_model.state_dict(),
                 'encoder': encoder.state_dict(),
                 'actor_model': actor_model.state_dict(),
                 'value_model1': value_model1.state_dict(),
