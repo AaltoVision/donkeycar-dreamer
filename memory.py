@@ -23,14 +23,12 @@ class ExperienceReplay():
       self.observations[self.idx] = observation.numpy()
     else:
       self.observations[self.idx] = postprocess_observation(observation.numpy(), self.bit_depth)  # Decentre and discretise visual observations (to save memory)
-    self.actions[self.idx] = action.numpy()
+    self.actions[self.idx] = action.numpy() if isinstance(action, torch.Tensor) else action
     self.rewards[self.idx] = reward
     self.nonterminals[self.idx] = not done
     self.idx = (self.idx + 1) % self.size
     self.full = self.full or self.idx == 0
     self.steps, self.episodes = self.steps + 1, self.episodes + (1 if done else 0)
-
-
 
   # Returns an index for a valid single sequence chunk uniformly sampled from the memory
   def _sample_idx(self, L):

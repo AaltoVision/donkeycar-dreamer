@@ -81,15 +81,15 @@ parser.add_argument('--experience-replay', type=str, default='', metavar='ER', h
 parser.add_argument('--render', action='store_true', help='Render environment')
 # For pcont
 parser.add_argument('--pcont', action='store_true', help='Wheter to predict the continuity, used to handle the terminal state')
-parser.add_argument('--pcont_scale', type=int, default=10, help='The coefficient term of the pcont loss')
+parser.add_argument('--pcont_scale', type=int, default=1, help='The coefficient term of the pcont loss')
 # For donkey car
 parser.add_argument('--sim_path', type=str, default='/u/95/zhaoy13/unix/summer/ICRA/donkey/DonkeySimLinux/donkey_sim.x86_64', help='path to the unity simulator, a .x86_64 file.')
 parser.add_argument('--port', type=int, default=9091, help='port to use for tcp')
 parser.add_argument('--host', type=str, default='127.0.0.1', help='host ip')
 # por sac
-parser.add_argument('--use_automatic_entropy_tuning', action='store_false', help="Use the entropy regularization")
+parser.add_argument('--use_automatic_entropy_tuning', action='store_true', help="Use the entropy regularization")
 parser.add_argument('--polyak', type=float, default=0.1)
-parser.add_argument('--temp', type=float, default=0.2)
+parser.add_argument('--temp', type=float, default=0)
 
 args = parser.parse_args()
 args.overshooting_distance = min(args.chunk_size, args.overshooting_distance)  # Overshooting distance cannot be greater than chunk size
@@ -217,7 +217,7 @@ for p in target_value_model2.parameters():
 log_alpha = torch.zeros(1, requires_grad=True, device=args.device)
 target_entropy = -np.prod(env.action_size).item()  # heuristic value from SAC paper
 
-world_param = list(transition_model.parameters()) + list(observation_model.parameters()) + list(reward_model1.parameters()) + list(reward_model1.parameters()) + list(encoder.parameters())
+world_param = list(transition_model.parameters()) + list(observation_model.parameters()) + list(reward_model1.parameters()) + list(reward_model2.parameters()) + list(encoder.parameters())
 if args.pcont:
   world_param += list(pcont_model.parameters())
 
@@ -259,7 +259,7 @@ def update_belief_and_act(args, env, actor_model, transition_model, encoder, bel
   #   # action = torch.clamp(action, [-1.0, 0.0], [1.0, 5.0])
   # else:
   #   action = actor_model(belief, posterior_state).mode()
-  action = actor_model(belief, posterior_state, deterministic=deterministic, with_logprob=False)  # with sac, not need to add exploration noise, the max entropy can maintain it.
+  action, _ = actor_model(belief, posterior_state, deterministic=deterministic, with_logprob=False)  # with sac, not need to add exploration noise, the max entropy can maintain it.
   if args.temp == 0 and not deterministic:
     action = Normal(action, args.expl_amount).rsample()
   action[:, 1] = 0.3  # TODO: fix the speed
@@ -329,7 +329,7 @@ for episode in tqdm(range(metrics['episodes'][-1] + 1, args.episodes + 1), total
       actions[:-1], 
       init_belief, 
       bottle(encoder, (observations[1:], )),
-      nonterminals[:-1])
+      nonterminals[1:])
    
     observation_loss = F.mse_loss(
       bottle(observation_model, (beliefs, posterior_states)),
@@ -357,8 +357,10 @@ for episode in tqdm(range(metrics['episodes'][-1] + 1, args.episodes + 1), total
     # print("check the reward", bottle(pcont_model, (beliefs, posterior_states)).shape, nonterminals[:-1].shape)
     if args.pcont:
       pcont_pred = torch.distributions.Bernoulli(logits=bottle(pcont_model, (beliefs, posterior_states)))
-      pcont_loss = -pcont_pred.log_prob(nonterminals[:-1]).mean(dim=(0,1))
-
+      # print("check pcont", pcont_pred)
+      # print("nonterminal", nonterminals[1:])
+      pcont_loss = -pcont_pred.log_prob(nonterminals[1:]).mean(dim=(0, 1))
+      print(pcont_loss)
     # Update model parameters
     world_optimizer.zero_grad()
     (observation_loss + reward_loss + kl_loss + (args.pcont_scale * pcont_loss if args.pcont else 0)).backward()
@@ -407,7 +409,6 @@ for episode in tqdm(range(metrics['episodes'][-1] + 1, args.episodes + 1), total
     imag_reward2 = bottle(reward_model2, (imag_beliefs, imag_states))
     imag_reward = torch.min(imag_reward1, imag_reward2)
 
-
     imag_value1 = bottle(value_model1, (imag_beliefs, imag_states))
     imag_value2 = bottle(value_model2, (imag_beliefs, imag_states))
     imag_value = torch.min(imag_value1, imag_value2)
@@ -423,12 +424,13 @@ for episode in tqdm(range(metrics['episodes'][-1] + 1, args.episodes + 1), total
       alpha = args.temp
 
     if args.pcont:
-      pcont = torch.distributions.Bernoulli(logits=bottle(pcont_model, (imag_beliefs, imag_states))).mean
+      pcont = torch.distributions.Bernoulli(logits=bottle(pcont_model, (imag_beliefs, imag_states))).mean.detach()
     else:
       pcont = args.discount * torch.ones_like(imag_reward)
-
-    imag_value[1:] -= alpha * imag_ac_logps  # add entropy here
-    # print(pcont)
+    # print("check pcont", pcont)
+    if args.temp != 0:
+      imag_value[1:] -= alpha * imag_ac_logps  # add entropy here
+    print(pcont)
     returns = cal_returns(imag_reward[:-1], imag_value[:-1], imag_value[-1], pcont[:-1], lambda_=args.disclam)
 
     discount = torch.cumprod(torch.cat([torch.ones_like(pcont[:1]), pcont[:-2]], 0), 0) 
@@ -459,7 +461,7 @@ for episode in tqdm(range(metrics['episodes'][-1] + 1, args.episodes + 1), total
       target_imag_value2 = bottle(target_value_model2, (imag_beliefs, imag_states))
       target_imag_value = torch.min(target_imag_value1, target_imag_value2)  # use the smaller value to avoid overfitting
 
-      target_imag_value[1:] -= alpha * imag_ac_logps
+      # target_imag_value[1:] -= alpha * imag_ac_logps
       returns = cal_returns(imag_reward[:-1], target_imag_value[:-1], target_imag_value[-1], pcont[:-1], lambda_=args.disclam)
       target_return = returns.detach()
 
@@ -506,7 +508,6 @@ for episode in tqdm(range(metrics['episodes'][-1] + 1, args.episodes + 1), total
   # Data collection
   with torch.no_grad():
     observation, total_reward = env.reset(), 0
-
     belief = torch.zeros(1, args.belief_size, device=args.device)
     posterior_state = torch.zeros(1, args.state_size, device=args.device)
     action = torch.zeros(1, env.action_size, device=args.device)
@@ -524,7 +525,6 @@ for episode in tqdm(range(metrics['episodes'][-1] + 1, args.episodes + 1), total
         action, 
         observation.to(device=args.device), 
         deterministic=False)
-
       D.append(observation, action.cpu(), reward, done)
       total_reward += reward
       observation = next_observation
