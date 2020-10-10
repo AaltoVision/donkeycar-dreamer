@@ -23,7 +23,7 @@ class ExperienceReplay():
     # init the buffer of one game
     self.buffer[self.game_idx] = {"obs": [], "action": [], "reward": [], "nonterminal": []}
 
-  def append(self, observation, action, reward, done):
+  def append(self, observation, action, reward, done, next_observation):
     # append data: if the game is not finished, append it; if a game is finished, append the game to self.buffer
     if self.symbolic_env:
       self.buffer[self.game_idx]["obs"].append(observation.numpy())
@@ -37,6 +37,7 @@ class ExperienceReplay():
 
     if done:
       # when a game is finished, change the idx of game and init new game_buffer
+      self.buffer[self.game_idx]["terminal_obs"] = postprocess_observation(next_observation.numpy(), self.bit_depth)
       self.game_idx = (self.game_idx + 1) % self.size  # when buffer is full, filling buffer begins from head
       self.full = self.full or self.game_idx == 0
       self.buffer[self.game_idx] = {"obs": [], "action": [], "reward": [], "nonterminal": []}
@@ -69,7 +70,7 @@ class ExperienceReplay():
         _nonterminals[i] = game["nonterminal"][position]
       else:
         # fill data beyond terminal state
-        _observations[i] = game["obs"][-1]
+        _observations[i] = game["terminal_obs"]
         if self.env:
           _actions[i] = self.env.sample_random_action()
         else:
