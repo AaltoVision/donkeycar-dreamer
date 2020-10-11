@@ -131,7 +131,7 @@ class Dreamer(Agent):
             args.dense_act).to(device=args.device)
 
     self.target_value_model = deepcopy(self.value_model)
-    self.target_value_model2 = deepcopy(self.value_model22)
+    self.target_value_model2 = deepcopy(self.value_model2)
 
     for p in self.target_value_model.parameters():
       p.requires_grad = False
