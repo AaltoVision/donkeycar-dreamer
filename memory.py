@@ -10,7 +10,6 @@ class ExperienceReplay():
     self.size = size
     self.observations = np.empty((size, observation_size) if symbolic_env else (size, 3, 64, 64), dtype=np.float32 if symbolic_env else np.uint8)
     self.actions = np.empty((size, action_size), dtype=np.float32)
-    self.act_his = np.empty((size, action_size * 3), dtype=np.float32)  # stack 3 history
     self.rewards = np.empty((size, ), dtype=np.float32) 
     # self.nonterminals = np.empty((size, 1), dtype=np.float32)
     self.nonterminals = np.empty((size, ), dtype=np.float32)
@@ -19,13 +18,12 @@ class ExperienceReplay():
     self.steps, self.episodes = 0, 0  # Tracks how much experience has been used in total
     self.bit_depth = bit_depth
 
-  def append(self, observation, action, act_history, reward, done):
+  def append(self, observation, action, reward, done):
     if self.symbolic_env:
       self.observations[self.idx] = observation.numpy()
     else:
       self.observations[self.idx] = postprocess_observation(observation.numpy(), self.bit_depth)  # Decentre and discretise visual observations (to save memory)
     self.actions[self.idx] = action.numpy() if isinstance(action, torch.Tensor) else action
-    self.act_his[self.idx] = act_history.numpy() if isinstance(act_history, torch.Tensor) else act_history
     self.rewards[self.idx] = reward
     self.nonterminals[self.idx] = not done
     self.idx = (self.idx + 1) % self.size
@@ -48,9 +46,8 @@ class ExperienceReplay():
       preprocess_observation_(observations, self.bit_depth)  # Undo discretisation for visual observations
     # return observations.reshape(L, n, *observations.shape[1:]), self.actions[vec_idxs].reshape(L, n, -1), self.rewards[vec_idxs].reshape(L, n), self.nonterminals[vec_idxs].reshape(L, n, 1)
     # TODO: remove the 1 dim of nonterminal
-    return observations.reshape(L, n, *observations.shape[1:]), self.actions[vec_idxs].reshape(L, n, -1), self.act_his[vec_idxs].reshape(L, n, -1), self.rewards[vec_idxs].reshape(L, n), self.nonterminals[vec_idxs].reshape(L, n)
+    return observations.reshape(L, n, *observations.shape[1:]), self.actions[vec_idxs].reshape(L, n, -1), self.rewards[vec_idxs].reshape(L, n), self.nonterminals[vec_idxs].reshape(L, n)
   # Returns a batch of sequence chunks uniformly sampled from the memory
-
   def sample(self, n, L):
     batch = self._retrieve_batch(np.asarray([self._sample_idx(L) for _ in range(n)]), n, L)
     return [torch.as_tensor(item).to(device=self.device) for item in batch]

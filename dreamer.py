@@ -19,20 +19,20 @@ parser = argparse.ArgumentParser(description='Dreamer')
 parser.add_argument('--seed', type=int, default=1, metavar='S', help='Random seed')
 parser.add_argument('--disable-cuda', action='store_true', help='Disable CUDA')
 parser.add_argument('--env', type=str, default='donkey-generated-roads-v0',
-                    choices=GYM_ENVS + CONTROL_SUITE_ENVS + DONKEY_CAR_ENVS,
-                    help='Gym/Control Suite/Donkey_Car environment')
+										choices=GYM_ENVS + CONTROL_SUITE_ENVS + DONKEY_CAR_ENVS,
+										help='Gym/Control Suite/Donkey_Car environment')
 parser.add_argument('--symbolic', action='store_true', help='Symbolic features')
 parser.add_argument('--max-episode-length', type=int, default=1000, metavar='T', help='Max episode length')
 parser.add_argument('--experience-size', type=int, default=1000000, metavar='D',
-                    help='Experience replay size')  # Original implementation has an unlimited buffer size, but 1 million is the max experience collected anyway
+										help='Experience replay size')  # Original implementation has an unlimited buffer size, but 1 million is the max experience collected anyway
 parser.add_argument('--cnn-act', type=str, default='relu', choices=dir(F),
-                    help='Model activation function for a convolution layer')
+										help='Model activation function for a convolution layer')
 parser.add_argument('--dense-act', type=str, default='elu', choices=dir(F),
-                    help='Model activation function a dense layer')
+										help='Model activation function a dense layer')
 parser.add_argument('--embedding-size', type=int, default=1024, metavar='E',
-                    help='Observation embedding size')  # Note that the default encoder for visual observations outputs a 1024D vector; for other embedding sizes an additional fully-connected layer is used
+										help='Observation embedding size')  # Note that the default encoder for visual observations outputs a 1024D vector; for other embedding sizes an additional fully-connected layer is used
 parser.add_argument('--hidden-size', type=int, default=300, metavar='H',
-                    help='Hidden size')  # paper:300; tf_implementation:400; aligned wit paper.
+										help='Hidden size')  # paper:300; tf_implementation:400; aligned wit paper.
 parser.add_argument('--belief-size', type=int, default=200, metavar='H', help='Belief/hidden size')
 parser.add_argument('--state-size', type=int, default=30, metavar='Z', help='State/latent size')
 parser.add_argument('--action-repeat', type=int, default=1, metavar='R', help='Action repeat')
@@ -50,7 +50,7 @@ parser.add_argument('--world_lr', type=float, default=6e-4, metavar='α', help='
 parser.add_argument('--actor_lr', type=float, default=8e-5, metavar='α', help='Learning rate')
 parser.add_argument('--value_lr', type=float, default=8e-5, metavar='α', help='Learning rate')
 parser.add_argument('--learning-rate-schedule', type=int, default=0, metavar='αS',
-                    help='Linear learning rate schedule (optimisation steps from 0 to final learning rate; 0 to disable)')
+										help='Linear learning rate schedule (optimisation steps from 0 to final learning rate; 0 to disable)')
 parser.add_argument('--adam-epsilon', type=float, default=1e-7, metavar='ε', help='Adam optimizer epsilon value')
 # Note that original has a linear learning rate decay, but it seems unlikely that this makes a significant difference
 parser.add_argument('--grad-clip-norm', type=float, default=100.0, metavar='C', help='Gradient clipping norm')
@@ -71,12 +71,12 @@ parser.add_argument('--experience-replay', type=str, default='', metavar='ER', h
 parser.add_argument('--render', action='store_true', help='Render environment')
 # For pcont
 parser.add_argument('--pcont', action='store_true',
-                    help='Wheter to predict the continuity, used to handle the terminal state')
+										help='Wheter to predict the continuity, used to handle the terminal state')
 parser.add_argument('--pcont_scale', type=int, default=1, help='The coefficient term of the pcont loss')
 # For donkey car
 parser.add_argument('--sim_path', type=str,
-                    default='/u/95/zhaoy13/unix/summer/ICRA/donkey/DonkeySimLinux/donkey_sim.x86_64',
-                    help='path to the unity simulator, a .x86_64 file.')
+										default='/u/95/zhaoy13/unix/summer/ICRA/donkey/DonkeySimLinux/donkey_sim.x86_64',
+										help='path to the unity simulator, a .x86_64 file.')
 parser.add_argument('--port', type=int, default=9091, help='port to use for tcp')
 parser.add_argument('--host', type=str, default='127.0.0.1', help='host ip')
 # por sac
@@ -87,8 +87,6 @@ parser.add_argument('--temp', type=float, default=0.2)
 
 parser.add_argument('--action_size', default=2)
 parser.add_argument('--observation_size', default=(3, 64, 64))
-
-parser.add_argument('--act_his_size', default=3)
 args = parser.parse_args()
 
 wandb.init(project="donkey_sac")
@@ -96,7 +94,7 @@ wandb.config.update(args)
 
 print(' ' * 26 + 'Options')
 for k, v in vars(args).items():
-  print(' ' * 26 + k + ': ' + str(v))
+	print(' ' * 26 + k + ': ' + str(v))
 
 # Setup
 results_dir = os.path.join('results', args.env, str(args.seed))
@@ -104,47 +102,41 @@ os.makedirs(results_dir, exist_ok=True)
 np.random.seed(args.seed)
 torch.manual_seed(args.seed)
 if torch.cuda.is_available() and not args.disable_cuda:
-  args.device = torch.device('cuda')
-  torch.cuda.manual_seed(args.seed)
+	args.device = torch.device('cuda')
+	torch.cuda.manual_seed(args.seed)
 else:
-  args.device = torch.device('cpu')
+	args.device = torch.device('cpu')
 
 metrics = {'steps': [], 'episodes': [], 'train_rewards': [], 'test_episodes': [], 'test_rewards': [],
-           'observation_loss': [], 'reward_loss': [], 'kl_loss': [], 'actor_loss': [], 'value_loss': []}
+					 'observation_loss': [], 'reward_loss': [], 'kl_loss': [], 'actor_loss': [], 'value_loss': []}
 
 summary_name = results_dir + "/{}_{}_log"
 writer = SummaryWriter(summary_name.format(args.env, args.seed))
 
 # Initialise training environment and experience replay memory
 env = Env(args.env, args.symbolic, args.seed, args.max_episode_length, args.action_repeat, args.bit_depth,
-          sim_path=args.sim_path, host=args.host, port=args.port)
+					sim_path=args.sim_path, host=args.host, port=args.port)
 agent = Dreamer(args)
 
 if args.experience_replay is not '' and os.path.exists(args.experience_replay):
-  agent.D = torch.load(args.experience_replay)
-  metrics['steps'], metrics['episodes'] = [agent.D.steps] * agent.D.episodes, list(range(1, agent.D.episodes + 1))
+	agent.D = torch.load(args.experience_replay)
+	metrics['steps'], metrics['episodes'] = [agent.D.steps] * agent.D.episodes, list(range(1, agent.D.episodes + 1))
 elif not args.test:
-  agent.D = ExperienceReplay(args.experience_size, args.symbolic, env.observation_size, env.action_size, args.bit_depth,
-                       args.device)  # TODO: add env in the argument list
+	agent.D = ExperienceReplay(args.experience_size, args.symbolic, env.observation_size, env.action_size, args.bit_depth,
+											 args.device)  # TODO: add env in the argument list
 
-  # Initialise dataset D with S random seed episodes
-  for s in range(1, args.seed_episodes + 1):
-    observation, done, t = env.reset(), False, 0
-    act_history = np.zeros(args.action_size*3, dtype=np.float32)
-    while not done:
-      action = env.sample_random_action()
-      action[1] = 0.3  # fix the action
-      next_observation, reward, done = env.step(action)
-      agent.D.append(observation, action, act_history, reward, done)
-
-      # maintain act_history
-      act_history = np.roll(act_history, -args.action_size, axis=-1)
-      act_history[-args.action_size:] = action
-
-      observation = next_observation
-      t += 1
-    metrics['steps'].append(t * args.action_repeat + (0 if len(metrics['steps']) == 0 else metrics['steps'][-1]))
-    metrics['episodes'].append(s)
+	# Initialise dataset D with S random seed episodes
+	for s in range(1, args.seed_episodes + 1):
+		observation, done, t = env.reset(), False, 0
+		while not done:
+			action = env.sample_random_action()
+			action[1] = 0.3  # fix the action
+			next_observation, reward, done = env.step(action)
+			agent.D.append(observation, action, reward, done)
+			observation = next_observation
+			t += 1
+		metrics['steps'].append(t * args.action_repeat + (0 if len(metrics['steps']) == 0 else metrics['steps'][-1]))
+		metrics['episodes'].append(s)
 
 
 
@@ -237,168 +229,159 @@ elif not args.test:
 
 # Training (and testing)
 for episode in tqdm(range(metrics['episodes'][-1] + 1, args.episodes + 1), total=args.episodes,
-                    initial=metrics['episodes'][-1] + 1):
-  # Model fitting
-  loss_info = agent.update_parameters(args.collect_interval)
+										initial=metrics['episodes'][-1] + 1):
+	# Model fitting
+	loss_info = agent.update_parameters(args.collect_interval)
 
-  # Update and plot loss metrics
-  losses = tuple(zip(*loss_info))
-  metrics['observation_loss'].append(losses[0])
-  metrics['reward_loss'].append(losses[1])
-  metrics['kl_loss'].append(losses[2])
-  metrics['kl_loss'].append(losses[3])
-  metrics['actor_loss'].append(losses[4])
-  metrics['value_loss'].append(losses[5])
-  lineplot(metrics['episodes'][-len(metrics['observation_loss']):], metrics['observation_loss'], 'observation_loss',
-           results_dir)
-  lineplot(metrics['episodes'][-len(metrics['reward_loss']):], metrics['reward_loss'], 'reward_loss', results_dir)
-  lineplot(metrics['episodes'][-len(metrics['kl_loss']):], metrics['kl_loss'], 'kl_loss', results_dir)
-  lineplot(metrics['episodes'][-len(metrics['actor_loss']):], metrics['actor_loss'], 'actor_loss', results_dir)
-  lineplot(metrics['episodes'][-len(metrics['value_loss']):], metrics['value_loss'], 'value_loss', results_dir)
+	# Update and plot loss metrics
+	losses = tuple(zip(*loss_info))
+	metrics['observation_loss'].append(losses[0])
+	metrics['reward_loss'].append(losses[1])
+	metrics['kl_loss'].append(losses[2])
+	metrics['kl_loss'].append(losses[3])
+	metrics['actor_loss'].append(losses[4])
+	metrics['value_loss'].append(losses[5])
+	lineplot(metrics['episodes'][-len(metrics['observation_loss']):], metrics['observation_loss'], 'observation_loss',
+					 results_dir)
+	lineplot(metrics['episodes'][-len(metrics['reward_loss']):], metrics['reward_loss'], 'reward_loss', results_dir)
+	lineplot(metrics['episodes'][-len(metrics['kl_loss']):], metrics['kl_loss'], 'kl_loss', results_dir)
+	lineplot(metrics['episodes'][-len(metrics['actor_loss']):], metrics['actor_loss'], 'actor_loss', results_dir)
+	lineplot(metrics['episodes'][-len(metrics['value_loss']):], metrics['value_loss'], 'value_loss', results_dir)
 
-  # Data collection
-  with torch.no_grad():
-    observation, total_reward = env.reset(), 0
-    belief = torch.zeros(1, args.belief_size, device=args.device)
-    posterior_state = torch.zeros(1, args.state_size, device=args.device)
-    action = torch.zeros(1, env.action_size, device=args.device)
-    act_history = torch.zeros(1, env.action_size*3, device=args.device)  # add act_history
+	# Data collection
+	with torch.no_grad():
+		observation, total_reward = env.reset(), 0
+		belief = torch.zeros(1, args.belief_size, device=args.device)
+		posterior_state = torch.zeros(1, args.state_size, device=args.device)
+		action = torch.zeros(1, env.action_size, device=args.device)
 
-    pbar = tqdm(range(args.max_episode_length // args.action_repeat))
-    for t in pbar:
-      # maintain belief and posterior_state
-      belief, posterior_state = agent.infer_state(observation.to(device=args.device), action, act_history, belief, posterior_state)
-      action = agent.select_action((belief, posterior_state), deterministic=False)
+		pbar = tqdm(range(args.max_episode_length // args.action_repeat))
+		for t in pbar:
+			# maintain belief and posterior_state
+			belief, posterior_state = agent.infer_state(observation.to(device=args.device), action, belief, posterior_state)
+			action = agent.select_action((belief, posterior_state), deterministic=False)
 
-      # interact with env
-      next_observation, reward, done = env.step(action.cpu() if isinstance(env, EnvBatcher) else action[0].cpu())  # Perform environment step (action repeats handled internally)
+			# interact with env
+			next_observation, reward, done = env.step(action.cpu() if isinstance(env, EnvBatcher) else action[
+					0].cpu())  # Perform environment step (action repeats handled internally)
 
-      agent.D.append(observation, action.cpu(), act_history.cpu(), reward, done,)
+			agent.D.append(observation, action.cpu(), reward, done)
 
-      # maintain act_history
-      act_history = torch.roll(act_history, -args.action_size, dims=-1)
-      act_history[:, -args.action_size:] = action
+			total_reward += reward
+			observation = next_observation
+			if args.render:
+				env.render()
+			if done:
+				pbar.close()
+				break
 
-      total_reward += reward
-      observation = next_observation
-      if args.render:
-        env.render()
-      if done:
-        pbar.close()
-        break
+		# Update and plot train reward metrics
+		metrics['steps'].append(t + metrics['steps'][-1])
+		metrics['episodes'].append(episode)
+		metrics['train_rewards'].append(total_reward)
+		lineplot(metrics['episodes'][-len(metrics['train_rewards']):], metrics['train_rewards'], 'train_rewards',
+						 results_dir)
 
-    # Update and plot train reward metrics
-    metrics['steps'].append(t + metrics['steps'][-1])
-    metrics['episodes'].append(episode)
-    metrics['train_rewards'].append(total_reward)
-    lineplot(metrics['episodes'][-len(metrics['train_rewards']):], metrics['train_rewards'], 'train_rewards',
-             results_dir)
+	# Test model
+	if episode % args.test_interval == 0:
+		# Set models to eval mode
+		agent.transition_model.eval()
+		agent.observation_model.eval()
+		agent.reward_model.eval()
+		agent.encoder.eval()
+		agent.actor_model.eval()
+		agent.value_model.eval()
 
-  # Test model
-  if episode % args.test_interval == 0:
-    # Set models to eval mode
-    agent.transition_model.eval()
-    agent.observation_model.eval()
-    agent.reward_model.eval()
-    agent.encoder.eval()
-    agent.actor_model.eval()
-    agent.value_model.eval()
+		# Initialise parallelised test environments
+		# test_envs = EnvBatcher(
+		#   Env,
+		#   (args.env, args.symbolic, args.seed, args.max_episode_length, args.action_repeat, args.bit_depth, args.sim_path, args.host, args.port),
+		#   {},
+		#   args.test_episodes)
 
-    # Initialise parallelised test environments
-    # test_envs = EnvBatcher(
-    #   Env,
-    #   (args.env, args.symbolic, args.seed, args.max_episode_length, args.action_repeat, args.bit_depth, args.sim_path, args.host, args.port),
-    #   {},
-    #   args.test_episodes)
+		with torch.no_grad():
+			# observation = test_envs.reset()
+			observation = env.reset()
+			# total_rewards = np.zeros((args.test_episodes, ))
+			total_rewards = 0
+			video_frames = []
 
-    with torch.no_grad():
-      # observation = test_envs.reset()
-      observation = env.reset()
-      # total_rewards = np.zeros((args.test_episodes, ))
-      total_rewards = 0
-      video_frames = []
+			belief = torch.zeros(args.test_episodes, args.belief_size, device=args.device)
+			posterior_state = torch.zeros(args.test_episodes, args.state_size, device=args.device)
+			action = torch.zeros(args.test_episodes, env.action_size, device=args.device)
 
-      belief = torch.zeros(args.test_episodes, args.belief_size, device=args.device)
-      posterior_state = torch.zeros(args.test_episodes, args.state_size, device=args.device)
-      action = torch.zeros(args.test_episodes, env.action_size, device=args.device)
-      act_history = torch.zeros(args.test_episodes, env.action_size * 3, device=args.device)  # add act_history
+			for t in tqdm(range(args.max_episode_length // args.action_repeat)):
+				belief, posterior_state = agent.infer_state(observation.to(device=args.device), action, belief, posterior_state)
+				action = agent.select_action((belief, posterior_state), deterministic=True)
 
-      for t in tqdm(range(args.max_episode_length // args.action_repeat)):
+				# interact with env
+				next_observation, reward, done = env.step(action.cpu() if isinstance(env, EnvBatcher) else action[
+					0].cpu())  # Perform environment step (action repeats handled internally)
 
-        belief, posterior_state = agent.infer_state(observation.to(device=args.device), action, act_history, belief, posterior_state)
-        action = agent.select_action((belief, posterior_state), deterministic=True)
+				# total_rewards += reward.numpy()
+				total_rewards += reward
+				if not args.symbolic:  # Collect real vs. predicted frames for video
+					video_frames.append(
+						make_grid(torch.cat([observation, agent.observation_model(belief, posterior_state).cpu()], dim=3) + 0.5,
+											nrow=5).numpy())  # Decentre
+				observation = next_observation
+				# if done.sum().item() == args.test_episodes:
+				#   pbar.close()
+				#   break
+				if done:
+					pbar.close()
+					break
 
-        # interact with env
-        next_observation, reward, done = env.step(action.cpu() if isinstance(env, EnvBatcher) else action[0].cpu())  # Perform environment step (action repeats handled internally)
+		# Update and plot reward metrics (and write video if applicable) and save metrics
+		metrics['test_episodes'].append(episode)
+		# metrics['test_rewards'].append(total_rewards.tolist())
+		metrics['test_rewards'].append(total_rewards)
+		lineplot(metrics['test_episodes'], metrics['test_rewards'], 'test_rewards', results_dir)
+		lineplot(np.asarray(metrics['steps'])[np.asarray(metrics['test_episodes']) - 1], metrics['test_rewards'],
+						 'test_rewards_steps', results_dir, xaxis='step')
+		if not args.symbolic:
+			episode_str = str(episode).zfill(len(str(args.episodes)))
+			write_video(video_frames, 'test_episode_%s' % episode_str, results_dir)  # Lossy compression
+			save_image(torch.as_tensor(video_frames[-1]), os.path.join(results_dir, 'test_episode_%s.png' % episode_str))
+		torch.save(metrics, os.path.join(results_dir, 'metrics.pth'))
 
-        # maintain act_history
-        act_history = torch.roll(act_history, -args.action_size, dims=-1)
-        act_history[:, -args.action_size : ] = action
+		# Set models to train mode
+		agent.transition_model.train()
+		agent.observation_model.train()
+		agent.reward_model.train()
+		agent.encoder.train()
+		agent.actor_model.train()
+		agent.value_model.train()
+	# Close test environments
+	# test_envs.close()
+	# env.close()
 
-        # total_rewards += reward.numpy()
-        total_rewards += reward
-        if not args.symbolic:  # Collect real vs. predicted frames for video
-          video_frames.append(
-            make_grid(torch.cat([observation, agent.observation_model(belief, posterior_state).cpu()], dim=3) + 0.5,
-                      nrow=5).numpy())  # Decentre
-        observation = next_observation
-        # if done.sum().item() == args.test_episodes:
-        #   pbar.close()
-        #   break
-        if done:
-          pbar.close()
-          break
-
-    # Update and plot reward metrics (and write video if applicable) and save metrics
-    metrics['test_episodes'].append(episode)
-    # metrics['test_rewards'].append(total_rewards.tolist())
-    metrics['test_rewards'].append(total_rewards)
-    lineplot(metrics['test_episodes'], metrics['test_rewards'], 'test_rewards', results_dir)
-    lineplot(np.asarray(metrics['steps'])[np.asarray(metrics['test_episodes']) - 1], metrics['test_rewards'],
-             'test_rewards_steps', results_dir, xaxis='step')
-    if not args.symbolic:
-      episode_str = str(episode).zfill(len(str(args.episodes)))
-      write_video(video_frames, 'test_episode_%s' % episode_str, results_dir)  # Lossy compression
-      save_image(torch.as_tensor(video_frames[-1]), os.path.join(results_dir, 'test_episode_%s.png' % episode_str))
-    torch.save(metrics, os.path.join(results_dir, 'metrics.pth'))
-
-    # Set models to train mode
-    agent.transition_model.train()
-    agent.observation_model.train()
-    agent.reward_model.train()
-    agent.encoder.train()
-    agent.actor_model.train()
-    agent.value_model.train()
-  # Close test environments
-  # test_envs.close()
-  # env.close()
-
-  writer.add_scalar("train_reward", metrics['train_rewards'][-1], metrics['steps'][-1])
-  writer.add_scalar("train/episode_reward", metrics['train_rewards'][-1], metrics['steps'][-1] * args.action_repeat)
-  writer.add_scalar("observation_loss", metrics['observation_loss'][0][-1], metrics['steps'][-1])
-  writer.add_scalar("reward_loss", metrics['reward_loss'][0][-1], metrics['steps'][-1])
-  writer.add_scalar("kl_loss", metrics['kl_loss'][0][-1], metrics['steps'][-1])
-  writer.add_scalar("actor_loss", metrics['actor_loss'][0][-1], metrics['steps'][-1])
-  writer.add_scalar("value_loss", metrics['value_loss'][0][-1], metrics['steps'][-1])
-  print("episodes: {}, total_steps: {}, train_reward: {} ".format(metrics['episodes'][-1], metrics['steps'][-1],
-                                                                  metrics['train_rewards'][-1]))
-  wandb.log({"episode": episode, "cumulative_reward": total_reward})
-  # Checkpoint models
-  if episode % args.checkpoint_interval == 0:
-    torch.save({'transition_model': agent.transition_model.state_dict(),
-                'observation_model': agent.observation_model.state_dict(),
-                'reward_model1': agent.reward_model.state_dict(),
-                'encoder': agent.encoder.state_dict(),
-                'actor_model': agent.actor_model.state_dict(),
-                'value_model1': agent.value_model.state_dict(),
-                'value_model2': agent.value_model.state_dict(),
-                'world_optimizer': agent.world_optimizer.state_dict(),
-                'actor_optimizer': agent.actor_optimizer.state_dict(),
-                'value_optimizer': agent.value_optimizer.state_dict()
-                }, os.path.join(results_dir, 'models_%d.pth' % episode))
-    if args.checkpoint_experience:
-      torch.save(agent.D, os.path.join(results_dir,
-                                 'experience.pth'))  # Warning: will fail with MemoryError with large memory sizes
+	writer.add_scalar("train_reward", metrics['train_rewards'][-1], metrics['steps'][-1])
+	writer.add_scalar("train/episode_reward", metrics['train_rewards'][-1], metrics['steps'][-1] * args.action_repeat)
+	writer.add_scalar("observation_loss", metrics['observation_loss'][0][-1], metrics['steps'][-1])
+	writer.add_scalar("reward_loss", metrics['reward_loss'][0][-1], metrics['steps'][-1])
+	writer.add_scalar("kl_loss", metrics['kl_loss'][0][-1], metrics['steps'][-1])
+	writer.add_scalar("actor_loss", metrics['actor_loss'][0][-1], metrics['steps'][-1])
+	writer.add_scalar("value_loss", metrics['value_loss'][0][-1], metrics['steps'][-1])
+	print("episodes: {}, total_steps: {}, train_reward: {} ".format(metrics['episodes'][-1], metrics['steps'][-1],
+																																	metrics['train_rewards'][-1]))
+	wandb.log({"episode": episode, "cumulative_reward": total_reward})
+	# Checkpoint models
+	if episode % args.checkpoint_interval == 0:
+		torch.save({'transition_model': agent.transition_model.state_dict(),
+								'observation_model': agent.observation_model.state_dict(),
+								'reward_model1': agent.reward_model.state_dict(),
+								'encoder': agent.encoder.state_dict(),
+								'actor_model': agent.actor_model.state_dict(),
+								'value_model1': agent.value_model.state_dict(),
+								'value_model2': agent.value_model.state_dict(),
+								'world_optimizer': agent.world_optimizer.state_dict(),
+								'actor_optimizer': agent.actor_optimizer.state_dict(),
+								'value_optimizer': agent.value_optimizer.state_dict()
+								}, os.path.join(results_dir, 'models_%d.pth' % episode))
+		if args.checkpoint_experience:
+			torch.save(agent.D, os.path.join(results_dir,
+																 'experience.pth'))  # Warning: will fail with MemoryError with large memory sizes
 
 # Close training environment
 env.close()
