@@ -148,7 +148,7 @@ class Dreamer(Agent):
       self.actor_optimizer = optim.Adam(self.actor_model.parameters(), lr=args.actor_lr)
       self.value_optimizer = optim.Adam(self.value_model.parameters(), lr=args.value_lr)
 
-      # setup the free_nat to
+      # setup the free_nats
       self.free_nats = torch.full((1, ), args.free_nats, dtype=torch.float32, device=args.device)  # Allowed deviation in KL divergence
 
       # TODO: change it to the new replay buffer, in buffer.py
@@ -157,6 +157,8 @@ class Dreamer(Agent):
       # TODO: print out the param used in Dreamer
       # var_counts = tuple(count_vars(module) for module in [self., self.ac.q1, self.ac.q2])
       # print('\nNumber of parameters: \t pi: %d, \t q1: %d, \t q2: %d\n' % var_counts)
+
+      self.action_history = torch.zeros(args.act_his_size, args.action_size, device=args.device)
 
   def process_im(self, image, image_size=None, rgb=None):
     # Resize, put channel first, convert it to a tensor, centre it to [-0.5, 0.5] and add batch dimenstion.
@@ -266,6 +268,8 @@ class Dreamer(Agent):
 
     imag_beliefs, imag_states, imag_ac_logps = [beliefs], [posterior_states], []
 
+    imag_act_history = torch.zeros(1, flatten_size, 3*self.args.action_size).to(self.args.device)
+
     for i in range(self.args.planning_horizon):
       imag_action, imag_ac_logp = self.actor_model(
         imag_beliefs[-1].detach(),
@@ -273,10 +277,17 @@ class Dreamer(Agent):
         deterministic=False,
         with_logprob=with_logprob
       )
-      imag_action = imag_action.unsqueeze(dim=0)
+      imag_action = imag_action.unsqueeze(dim=0)  # add time dimension
 
       # print(imag_states[-1].shape, imag_action.shape, imag_beliefs[-1].shape)
-      imag_belief, imag_state, _, _ = self.transition_model(imag_states[-1], imag_action, imag_beliefs[-1])
+      imag_belief, imag_state, _, _ = self.transition_model(imag_states[-1],
+                                                            imag_action,
+                                                            imag_act_history,
+                                                            imag_beliefs[-1])
+      # maintain the imag_act_history
+      imag_act_history = torch.roll(imag_act_history, -self.args.action_size, dims=-1)
+      imag_act_history[:, :, -self.args.action_size:] = imag_action  # TODO: check this
+
       imag_beliefs.append(imag_belief.squeeze(dim=0))
       imag_states.append(imag_state.squeeze(dim=0))
       if with_logprob:
@@ -293,7 +304,7 @@ class Dreamer(Agent):
     loss_info = []  # used to record loss
     for s in tqdm(range(gradient_steps)):
       # get state and belief of samples
-      observations, actions, rewards, nonterminals = self.D.sample(self.args.batch_size, self.args.chunk_size)
+      observations, actions, act_history, rewards, nonterminals = self.D.sample(self.args.batch_size, self.args.chunk_size)
       init_belief = torch.zeros(self.args.batch_size, self.args.belief_size, device=self.args.device)
       init_state = torch.zeros(self.args.batch_size, self.args.state_size, device=self.args.device)
 
@@ -301,6 +312,7 @@ class Dreamer(Agent):
       beliefs, prior_states, prior_means, prior_std_devs, posterior_states, posterior_means, posterior_std_devs = self.transition_model(
         init_state,
         actions[:-1],
+        act_history[:-1],
         init_belief,
         bottle(self.encoder, (observations[1:], )),
         nonterminals[:-1])
@@ -357,15 +369,18 @@ class Dreamer(Agent):
 
     return loss_info
 
-  def infer_state(self, observation, action, belief=None, state=None):
+  def infer_state(self, observation, action, act_history, belief=None, state=None):
     """ Infer belief over current state q(s_t|o≤t,a<t) from the history,
         return updated belief and posterior_state at time t
         returned shape: belief/state [belief/state_dim] (remove the time_dim)
+        act_history: shape(batch, act_size * 3)
     """
     # observation is obs.to(device), action.shape=[act_dim] (will add time dim inside this fn), belief.shape
+    # TODO: add act_history in dreamer.py
     belief, _, _, _, posterior_state, _, _ = self.transition_model(
       state,
       action.unsqueeze(dim=0),
+      act_history.unsqueeze(dim=0),
       belief,
       self.encoder(observation).unsqueeze(dim=0))  # Action and observation need extra time dimension
 
