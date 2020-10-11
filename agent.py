@@ -118,6 +118,12 @@ class Dreamer(Agent):
             args.hidden_size,
             args.dense_act).to(device=args.device)
 
+    # self.value_model2 = ValueModel(
+    #         args.belief_size,
+    #         args.state_size,
+    #         args.hidden_size,
+    #         args.dense_act).to(device=args.device)
+
     self.pcont_model = PCONTModel(
             args.belief_size,
             args.state_size,
@@ -146,7 +152,7 @@ class Dreamer(Agent):
       self.free_nats = torch.full((1, ), args.free_nats, dtype=torch.float32, device=args.device)  # Allowed deviation in KL divergence
 
       # TODO: change it to the new replay buffer, in buffer.py
-      self.D = ExperienceReplay(args.experience_size, args.symbolic, args.observation_size, args.action_size, args.bit_depth, args.device)  #TODO: add env in the argument list
+      self.D = ExperienceReplay(args.experience_size, args.symbolic, args.observation_size, args.action_size, args.bit_depth, args.device)
 
       # TODO: print out the param used in Dreamer
       # var_counts = tuple(count_vars(module) for module in [self., self.ac.q1, self.ac.q2])
@@ -297,7 +303,7 @@ class Dreamer(Agent):
         actions[:-1],
         init_belief,
         bottle(self.encoder, (observations[1:], )),
-        nonterminals[1:])
+        nonterminals[:-1])
 
       # update paras of world model
       world_model_loss = self._compute_loss_world(
@@ -345,9 +351,9 @@ class Dreamer(Agent):
 
       loss_info.append([observation_loss.item(), reward_loss.item(), kl_loss.item(), pcont_loss.item() if self.args.pcont else 0, actor_loss.item(), critic_loss.item()])
 
-      # finally, update target value function every #gradient_steps
-      with torch.no_grad():
-        self.target_value_model.load_state_dict(self.value_model.state_dict())
+    # finally, update target value function every #gradient_steps
+    with torch.no_grad():
+      self.target_value_model.load_state_dict(self.value_model.state_dict())
 
     return loss_info
 

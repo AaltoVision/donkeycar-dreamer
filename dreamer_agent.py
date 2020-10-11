@@ -193,6 +193,7 @@ class RL_Agent():
     if image is not None:
       self.image = image  # get observation, np with size (120, 160, 3)
 
+
     self.dead = self.is_dead(self.image) if not self.sim else self.is_dead_sim(self.image)
 
     if self.step == 0:
@@ -242,7 +243,7 @@ class RL_Agent():
 
     self.step += 1
 
-    if self.step < SKIP_INITIAL_STEPS+20:
+    if self.step < SKIP_INITIAL_STEPS:
       # skip initial 20 steps to wait initialization
       return 0, 0, False
 
