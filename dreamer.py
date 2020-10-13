@@ -132,7 +132,8 @@ elif not args.test:
 			action = env.sample_random_action()
 			action[1] = 0.3  # fix the action
 			next_observation, reward, done = env.step(action)
-			agent.D.append(observation, action, reward, done)
+			# agent.D.append(observation, action, reward, done)
+			agent.D.append(next_observation, action, reward, done)  # TODO:1
 			observation = next_observation
 			t += 1
 		metrics['steps'].append(t * args.action_repeat + (0 if len(metrics['steps']) == 0 else metrics['steps'][-1]))
@@ -265,8 +266,8 @@ for episode in tqdm(range(metrics['episodes'][-1] + 1, args.episodes + 1), total
 			next_observation, reward, done = env.step(action.cpu() if isinstance(env, EnvBatcher) else action[
 					0].cpu())  # Perform environment step (action repeats handled internally)
 
-			agent.D.append(observation, action.cpu(), reward, done)
-
+			# agent.D.append(observation, action.cpu(), reward, done)
+			agent.D.append(next_observation, action.cpu(), reward, done)  # TODO:2
 			total_reward += reward
 			observation = next_observation
 			if args.render:
