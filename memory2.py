@@ -10,7 +10,7 @@ class ExperienceReplay():
     self.size = size
     self.observations = np.empty((size, observation_size) if symbolic_env else (size, 3, 64, 64), dtype=np.float32 if symbolic_env else np.uint8)
     self.actions = np.empty((size, action_size), dtype=np.float32)
-    self.rewards = np.empty((size, ), dtype=np.float32) 
+    self.rewards = np.empty((size, ), dtype=np.float32)
     # self.nonterminals = np.empty((size, 1), dtype=np.float32)
     self.nonterminals = np.empty((size, ), dtype=np.float32)
     self.idx = 0
@@ -37,6 +37,7 @@ class ExperienceReplay():
       idx = np.random.randint(0, self.size if self.full else self.idx - L)
       idxs = np.arange(idx, idx + L) % self.size
       valid_idx = not self.idx in idxs[1:]  # Make sure data does not cross the memory index
+      
     return idxs
 
   def _retrieve_batch(self, idxs, n, L):

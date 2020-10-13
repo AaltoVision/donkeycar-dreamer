@@ -57,7 +57,7 @@ class TransitionModel(nn.Module):
     # Loop over time sequence
     for t in range(T - 1):
       _state = prior_states[t] if observations is None else posterior_states[t]  # Select appropriate previous state
-      _state = _state if nonterminals is None else _state * nonterminals[t].unsqueeze(dim=-1)  # Mask if previous transition was terminal
+      _state = _state if (nonterminals is None or t == 0) else _state * nonterminals[t-1].unsqueeze(dim=-1)  # Mask if previous transition was terminal  # TODO:3
       # Compute belief (deterministic hidden state)
       hidden = self.act_fn(self.fc_embed_state_action(torch.cat([_state, actions[t]], dim=1)))
       beliefs[t + 1] = self.rnn(hidden, beliefs[t])

@@ -189,15 +189,25 @@ class Dreamer(Agent):
     beliefs, prior_states, prior_means, prior_std_devs, posterior_states, posterior_means, posterior_std_devs = state
     observations, rewards, nonterminals = data
 
+    # observation_loss = F.mse_loss(
+    #   bottle(self.observation_model, (beliefs, posterior_states)),
+    #   observations[1:],
+    #   reduction='none').sum(dim=2 if self.args.symbolic else (2, 3, 4)).mean(dim=(0, 1))
+    #
+    # reward_loss = F.mse_loss(
+    #   bottle(self.reward_model, (beliefs, posterior_states)),
+    #   rewards[1:],
+    #   reduction='none').mean(dim=(0,1))
+
     observation_loss = F.mse_loss(
       bottle(self.observation_model, (beliefs, posterior_states)),
-      observations[1:],
+      observations,
       reduction='none').sum(dim=2 if self.args.symbolic else (2, 3, 4)).mean(dim=(0, 1))
 
     reward_loss = F.mse_loss(
       bottle(self.reward_model, (beliefs, posterior_states)),
-      rewards[1:],
-      reduction='none').mean(dim=(0,1))
+      rewards,
+      reduction='none').mean(dim=(0,1))  # TODO: 5
 
     # transition loss
     kl_loss = torch.max(
@@ -308,12 +318,19 @@ class Dreamer(Agent):
       init_state = torch.zeros(self.args.batch_size, self.args.state_size, device=self.args.device)
 
       # Update belief/state using posterior from previous belief/state, previous action and current observation (over entire sequence at once)
+      # beliefs, prior_states, prior_means, prior_std_devs, posterior_states, posterior_means, posterior_std_devs = self.transition_model(
+      #   init_state,
+      #   actions[:-1],
+      #   init_belief,
+      #   bottle(self.encoder, (observations[1:], )),
+      #   nonterminals[:-1])
+
       beliefs, prior_states, prior_means, prior_std_devs, posterior_states, posterior_means, posterior_std_devs = self.transition_model(
         init_state,
-        actions[:-1],
+        actions,
         init_belief,
-        bottle(self.encoder, (observations[1:], )),
-        nonterminals[:-1])
+        bottle(self.encoder, (observations, )),
+        nonterminals)  # TODO: 4
 
       # update paras of world model
       world_model_loss = self._compute_loss_world(
