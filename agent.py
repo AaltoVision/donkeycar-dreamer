@@ -243,7 +243,7 @@ class Dreamer(Agent):
       # calculate the target with the target nn
       target_imag_values = bottle(self.target_value_model, (imag_beliefs, imag_states))
       target_imag_values2 = bottle(self.target_value_model2, (imag_beliefs, imag_states))
-      target_imag_value = torch.min(target_imag_values, target_imag_values2)
+      target_imag_values = torch.min(target_imag_values, target_imag_values2)
       imag_rewards = bottle(self.reward_model, (imag_beliefs, imag_states))
       if self.args.pcont:
         pcont = torch.distributions.Bernoulli(logits=bottle(self.pcont_model, (imag_beliefs, imag_states))).mean
@@ -260,7 +260,7 @@ class Dreamer(Agent):
     value_pred2 = bottle(self.value_model2, (imag_beliefs, imag_states))[:-1]
 
     value_loss = F.mse_loss(value_pred, target_return, reduction="none").mean(dim=(0, 1))
-    value_loss2 = F.mse_loss(value_pred2, target_return, reducion="none").mean(dim=(0, 1))
+    value_loss2 = F.mse_loss(value_pred2, target_return, reduction="none").mean(dim=(0, 1))
     value_loss += value_loss2
 
     return value_loss
@@ -361,7 +361,7 @@ class Dreamer(Agent):
       self.value_optimizer.zero_grad()
       critic_loss.backward()
       nn.utils.clip_grad_norm_(self.value_model.parameters(), self.args.grad_clip_norm, norm_type=2)
-      nn.utils.clip_grad_norm_(self.value_model2.prarmeters(), self.args.grad_clip_norm, norm_type=2)
+      nn.utils.clip_grad_norm_(self.value_model2.parameters(), self.args.grad_clip_norm, norm_type=2)
       self.value_optimizer.step()
 
       loss_info.append([observation_loss.item(), reward_loss.item(), kl_loss.item(), pcont_loss.item() if self.args.pcont else 0, actor_loss.item(), critic_loss.item()])
