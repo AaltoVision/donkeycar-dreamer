@@ -8,7 +8,7 @@ from tqdm import tqdm
 from env import CONTROL_SUITE_ENVS, Env, GYM_ENVS, DONKEY_CAR_ENVS, EnvBatcher
 from memory import ExperienceReplay
 # from buffer import ExperienceReplay
-from agent import Dreamer
+from agent import Dreamer, bottle
 from utils import lineplot, write_video
 from tensorboardX import SummaryWriter
 import wandb
@@ -62,7 +62,7 @@ parser.add_argument('--discount', type=float, default=0.99, metavar='H', help='P
 parser.add_argument('--disclam', type=float, default=0.95, metavar='H', help='discount rate to compute return')
 
 parser.add_argument('--test', action='store_true', help='Test only')
-parser.add_argument('--test-interval', type=int, default=25, metavar='I', help='Test interval (episodes)')
+parser.add_argument('--test-interval', type=int, default=5, metavar='I', help='Test interval (episodes)')
 parser.add_argument('--test-episodes', type=int, default=1, metavar='E', help='Number of test episodes')  # for donkey env, since it can only use one car, just use test_epi=1 here, in other env, 10
 parser.add_argument('--checkpoint-interval', type=int, default=500, metavar='I', help='Checkpoint interval (episodes)')
 parser.add_argument('--checkpoint-experience', action='store_true', help='Checkpoint experience replay')
@@ -122,8 +122,8 @@ if args.experience_replay is not '' and os.path.exists(args.experience_replay):
 	agent.D = torch.load(args.experience_replay)
 	metrics['steps'], metrics['episodes'] = [agent.D.steps] * agent.D.episodes, list(range(1, agent.D.episodes + 1))
 elif not args.test:
-	agent.D = ExperienceReplay(args.experience_size, args.symbolic, env.observation_size, env.action_size, args.bit_depth,
-											 args.device)  # TODO: add env in the argument list
+	# agent.D = ExperienceReplay(args.experience_size, args.symbolic, env.observation_size, env.action_size, args.bit_depth,
+	# 										 args.device)  # TODO: add env in the argument list
 
 	# Initialise dataset D with S random seed episodes
 	for s in range(1, args.seed_episodes + 1):
@@ -270,6 +270,7 @@ for episode in tqdm(range(metrics['episodes'][-1] + 1, args.episodes + 1), total
 			agent.D.append(next_observation, action.cpu(), reward, done)  # TODO:2
 			total_reward += reward
 			observation = next_observation
+			print(bottle(agent.value_model, (belief.unsqueeze(dim=0), posterior_state.unsqueeze(dim=0))).item())
 			if args.render:
 				env.render()
 			if done:

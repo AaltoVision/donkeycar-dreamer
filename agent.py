@@ -9,6 +9,7 @@ from torch.distributions.kl import kl_divergence
 from torch.nn import functional as F
 from tqdm import tqdm
 from memory import ExperienceReplay
+# from memory2 import ExperienceReplay
 # from buffer import ExperienceReplay
 from models import bottle, Encoder, ObservationModel, RewardModel, TransitionModel, ValueModel, ActorModel, PCONTModel
 import cv2
@@ -171,6 +172,7 @@ class Dreamer(Agent):
       observation.add_(torch.rand_like(observation).div_(
         2 ** bit_depth))  # Dequantise (to approx. match likelihood of PDF of continuous images vs. PMF of discrete images)
 
+    image = image[40:, :, :]  # clip the above 40 rows
     image = torch.tensor(cv2.resize(image, (64, 64), interpolation=cv2.INTER_LINEAR).transpose(2, 0, 1),
                           dtype=torch.float32)  # Resize and put channel first
 
@@ -314,6 +316,7 @@ class Dreamer(Agent):
     for s in tqdm(range(gradient_steps)):
       # get state and belief of samples
       observations, actions, rewards, nonterminals = self.D.sample(self.args.batch_size, self.args.chunk_size)
+      # print("check sampled rewrads", rewards)
       init_belief = torch.zeros(self.args.batch_size, self.args.belief_size, device=self.args.device)
       init_state = torch.zeros(self.args.batch_size, self.args.state_size, device=self.args.device)
 

@@ -45,9 +45,9 @@ class ExperienceReplay():
     if not self.symbolic_env:
       preprocess_observation_(observations, self.bit_depth)  # Undo discretisation for visual observations
     # return observations.reshape(L, n, *observations.shape[1:]), self.actions[vec_idxs].reshape(L, n, -1), self.rewards[vec_idxs].reshape(L, n), self.nonterminals[vec_idxs].reshape(L, n, 1)
-    # TODO: remove the 1 dim of nonterminal
     return observations.reshape(L, n, *observations.shape[1:]), self.actions[vec_idxs].reshape(L, n, -1), self.rewards[vec_idxs].reshape(L, n), self.nonterminals[vec_idxs].reshape(L, n)
   # Returns a batch of sequence chunks uniformly sampled from the memory
+
   def sample(self, n, L):
     batch = self._retrieve_batch(np.asarray([self._sample_idx(L) for _ in range(n)]), n, L)
     return [torch.as_tensor(item).to(device=self.device) for item in batch]
