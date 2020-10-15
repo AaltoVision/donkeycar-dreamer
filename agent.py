@@ -416,7 +416,7 @@ class Dreamer(Agent):
     action, _ = self.actor_model(belief, posterior_state, deterministic=deterministic, with_logprob=False)
     if not deterministic:
       action = Normal(action, self.args.expl_amount).rsample()
-    action[:, 1] = 0.3
+    # action[:, 1] = 0.3
     # return action.cpu().numpy()
     return action  # this is a Tonsor.cuda
 

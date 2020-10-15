@@ -56,6 +56,7 @@ def define_config():
 	args.grad_clip_norm = 100.0
 	args.with_logprob = False
 	args.expl_amount = 0.3
+
 	return args
 
 
@@ -313,9 +314,13 @@ class RL_Agent():
 				# maintain act_history
 				# self.act_history = torch.roll(act_history, -args.action_size, dims=-1)
 				# self.act_history[:, -args.action_size:] = action
+
 				# to get steering and target_speed as numpy
-				action = self.action.cpu().numpy()
-				self.steering, self.target_speed = action[0][0], action[0][1]  # action has batch dimension
+				action = self.action.cpu().numpy()  # act dim : [batch_size, act_size]
+				action = self.enforce_limits(action[0], self.steering)  # size [act_size]
+				self.steering, self.target_speed = action[0], action[1]
+				self.action[0] = torch.tensor(action).to(self.action)
+
 				## didn't use enforce_limit yet
 				# self.steering, self.target_speed = self.enforce_limits(action, self.command_history[0]) # TODO: change this
 
@@ -376,7 +381,7 @@ class RL_Agent():
 
 		steering = max(steering_min, min(steering_max, action[0]))
 
-		return [steering, action[1] * var + mu]
+		return np.array([steering, action[1] * var + mu], dtype=np.float32)
 
 
 if __name__ == "__main__":
@@ -403,7 +408,8 @@ if __name__ == "__main__":
 			agent.replay_buffer_received_pub.run(prev_buffer)
 			epi += 1
 
-		if new_buffer[1] == False and prev_buffer > 0 and not trained and epi >= PREFILL_EPISODES:  # add flag to prefill data
+		if new_buffer[
+			1] == False and prev_buffer > 0 and not trained and epi >= PREFILL_EPISODES:  # add flag to prefill data
 			print("Training")
 			agent.agent.update_parameters(GRADIENT_STEPS)
 			params = agent.agent.export_parameters()

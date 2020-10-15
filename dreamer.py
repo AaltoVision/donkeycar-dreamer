@@ -6,8 +6,6 @@ from torch.nn import functional as F
 from torchvision.utils import make_grid, save_image
 from tqdm import tqdm
 from env import CONTROL_SUITE_ENVS, Env, GYM_ENVS, DONKEY_CAR_ENVS, EnvBatcher
-from memory import ExperienceReplay
-# from buffer import ExperienceReplay
 from agent import Dreamer, bottle
 from utils import lineplot, write_video
 from tensorboardX import SummaryWriter
