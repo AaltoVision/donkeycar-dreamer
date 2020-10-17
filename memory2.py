@@ -17,7 +17,7 @@ class ExperienceReplay():
     self.full = False  # Tracks if memory has been filled/all slots are valid
     self.steps, self.episodes = 0, 0  # Tracks how much experience has been used in total
     self.bit_depth = bit_depth
-    self.ends_idx = [] # to store the idx of ends_steps of each episode
+    self.ends_idx = []  # to store the idx of ends_steps of each episode
 
   def append(self, observation, action, reward, done):
     if self.symbolic_env:
@@ -61,8 +61,10 @@ class ExperienceReplay():
     _sample_idx = []
     for _ in range(n):
       _i = np.random.randint(n)
-      if _i < n//5:  # force to sample with ends state
+      if _i < n//3:  # force to sample with ends state
         _sample_idx.append(self._sample_idx(L, need_ends=True))
+
+        print("check sampled data with ends", self.rewards[self._sample_idx(L, need_ends=True)])
       else:  # random sample
         _sample_idx.append(self._sample_idx(L))
 

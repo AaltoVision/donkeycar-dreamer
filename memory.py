@@ -22,6 +22,7 @@ class ExperienceReplay():
     if self.symbolic_env:
       self.observations[self.idx] = observation.numpy()
     else:
+      # self.observations[self.idx] = observation.numpy()
       self.observations[self.idx] = postprocess_observation(observation.numpy(), self.bit_depth)  # Decentre and discretise visual observations (to save memory)
     self.actions[self.idx] = action.numpy() if isinstance(action, torch.Tensor) else action
     self.rewards[self.idx] = reward

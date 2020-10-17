@@ -220,8 +220,9 @@ class Dreamer(Agent):
 
     # print("check the reward", bottle(pcont_model, (beliefs, posterior_states)).shape, nonterminals[:-1].shape)
     if self.args.pcont:
-      pcont_pred = torch.distributions.Bernoulli(logits=bottle(self.pcont_model, (beliefs, posterior_states)))
-      pcont_loss = -pcont_pred.log_prob(nonterminals[1:]).mean(dim=(0, 1))
+      pcont_loss = F.binary_cross_entropy(bottle(self.pcont_model, (beliefs, posterior_states)), nonterminals)
+      # pcont_pred = torch.distributions.Bernoulli(logits=bottle(self.pcont_model, (beliefs, posterior_states)))
+      # pcont_loss = -pcont_pred.log_prob(nonterminals[1:]).mean(dim=(0, 1))
 
     return observation_loss, reward_loss, kl_loss, (self.args.pcont_scale * pcont_loss if self.args.pcont else 0)
 
@@ -239,7 +240,7 @@ class Dreamer(Agent):
 
     if imag_ac_logps:
       imag_values[1:] -= self.args.temp * imag_ac_logps  # add entropy here
-    # print(pcont)
+
     returns = cal_returns(imag_rewards[:-1], imag_values[:-1], imag_values[-1], pcont[:-1], lambda_=self.args.disclam)
 
     discount = torch.cumprod(torch.cat([torch.ones_like(pcont[:1]), pcont[:-2]], 0), 0)
@@ -258,10 +259,10 @@ class Dreamer(Agent):
       target_imag_values = torch.min(target_imag_values, target_imag_values2)
       imag_rewards = bottle(self.reward_model, (imag_beliefs, imag_states))
       if self.args.pcont:
-        pcont = torch.distributions.Bernoulli(logits=bottle(self.pcont_model, (imag_beliefs, imag_states))).mean
+        pcont = bottle(self.pcont_model, (imag_beliefs, imag_states))
       else:
         pcont = self.args.discount * torch.ones_like(imag_rewards)
-
+    # print("check pcont", pcont)
     if imag_ac_logps:
       target_imag_values[1:] -= self.args.temp * imag_ac_logps
 
@@ -416,8 +417,9 @@ class Dreamer(Agent):
     action, _ = self.actor_model(belief, posterior_state, deterministic=deterministic, with_logprob=False)
     if not deterministic:
       action = Normal(action, self.args.expl_amount).rsample()
-    # action[:, 1] = 0.3
-    # return action.cpu().numpy()
+    action[:, 1] = 0.3
+    # return action.cu().numpy()
+    # print(action)
     return action  # this is a Tonsor.cuda
 
   def import_parameters(self, params):

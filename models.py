@@ -300,7 +300,7 @@ class ActorModel(nn.Module):
     # TanhTransform = ComposeTransform([AffineTransform(0., 2.), SigmoidTransform(), AffineTransform(-1., 2.)])
     transform = [AffineTransform(0., 2.), SigmoidTransform(), AffineTransform(-1., 2.),  # TanhTransform
                  AffineTransform(loc=torch.tensor([0.0, 0.3]).to("cuda"),
-                                scale=torch.tensor([0.4, 0.2]).to("cuda"))]  # TODO: this is limited at donkeycar env
+                                scale=torch.tensor([0.4, 0.0]).to("cuda"))]  # TODO: this is limited at donkeycar env
     dist = TransformedDistribution(dist, transform)
     dist = torch.distributions.independent.Independent(dist, 1)  # Introduces dependence between actions dimension
     dist = SampleDist(dist)  # because after transform a distribution, some methods may become invalid, such as entropy, mean and mode, we need SmapleDist to approximate it.
@@ -373,5 +373,5 @@ class PCONTModel(nn.Module):
     hidden = self.act_fn(self.fc2(hidden))
     hidden = self.act_fn(self.fc3(hidden))
     x = self.fc4(hidden).squeeze(dim=1)
-    # The output is a binary distribution
-    return x
+    p = torch.sigmoid(x)
+    return p

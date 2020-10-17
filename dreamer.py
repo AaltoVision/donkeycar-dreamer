@@ -52,7 +52,7 @@ parser.add_argument('--learning-rate-schedule', type=int, default=0, metavar='α
 parser.add_argument('--adam-epsilon', type=float, default=1e-7, metavar='ε', help='Adam optimizer epsilon value')
 # Note that original has a linear learning rate decay, but it seems unlikely that this makes a significant difference
 parser.add_argument('--grad-clip-norm', type=float, default=100.0, metavar='C', help='Gradient clipping norm')
-parser.add_argument('--expl_amount', type=float, default=0.3, help='exploration noise')
+parser.add_argument('--expl_amount', type=float, default=0.1, help='exploration noise')
 
 parser.add_argument('--planning-horizon', type=int, default=15, metavar='H', help='Planning horizon distance')
 
