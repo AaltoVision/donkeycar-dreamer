@@ -43,7 +43,7 @@ parser.add_argument('--collect-interval', type=int, default=100, metavar='C', he
 parser.add_argument('--batch-size', type=int, default=50, metavar='B', help='Batch size')
 parser.add_argument('--chunk-size', type=int, default=50, metavar='L', help='Chunk size')
 parser.add_argument('--free-nats', type=float, default=3, metavar='F', help='Free nats')
-parser.add_argument('--bit-depth', type=int, default=5, metavar='B', help='Image bit depth (quantisation)')
+parser.add_argument('--bit-depth', type=int, default=8, metavar='B', help='Image bit depth (quantisation)')
 parser.add_argument('--world_lr', type=float, default=6e-4, metavar='α', help='Learning rate')
 parser.add_argument('--actor_lr', type=float, default=8e-5, metavar='α', help='Learning rate')
 parser.add_argument('--value_lr', type=float, default=8e-5, metavar='α', help='Learning rate')

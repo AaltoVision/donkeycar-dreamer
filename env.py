@@ -86,8 +86,6 @@ class ControlSuiteEnv():
     spec = self._env.action_spec()
     return torch.from_numpy(np.random.uniform(spec.minimum, spec.maximum, spec.shape))
 
-
-
 class GymEnv():
   def __init__(self, env, symbolic, seed, max_episode_length, action_repeat, bit_depth):
     import gym

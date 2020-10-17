@@ -55,7 +55,7 @@ def define_config():
 	args.chunk_size = 30
 	args.grad_clip_norm = 100.0
 	args.with_logprob = False
-	args.expl_amount = 0.3
+	args.expl_amount = 0.1
 
 	return args
 
@@ -64,8 +64,8 @@ DONKEY_NAME = args.car_name
 
 STEER_LIMIT_LEFT = -1
 STEER_LIMIT_RIGHT = 1
-THROTTLE_MAX = 1
-THROTTLE_MIN = 0.25
+THROTTLE_MAX = 0.5
+THROTTLE_MIN = 0.1
 MAX_STEERING_DIFF = 0.25
 STEP_LENGTH = 0.1
 
@@ -227,10 +227,10 @@ class RL_Agent():
 			"""Save observation to replay buffer"""
 			reward = 1 + (self.speed - THROTTLE_MIN) / (THROTTLE_MAX - THROTTLE_MIN)
 			reward = min(reward, 2) / 2
-
+			# reward = self.speed + 1
 			done = self.dead
 			reward = reward * -10 if self.dead else reward
-
+			# reward = -self.speed - 10 if self.dead else reward
 			# cv2.imwrite("./obs/img_{t}.png".format(t=self.step), self.image)
 			next_observation = self.agent.process_im(self.image)
 
@@ -311,16 +311,17 @@ class RL_Agent():
 																																	 belief=self.belief,
 																																	 state=self.posterior_state)
 				self.action = self.agent.select_action((self.belief, self.posterior_state))
+				# print("before limit", self.action)
 				# maintain act_history
 				# self.act_history = torch.roll(act_history, -args.action_size, dims=-1)
 				# self.act_history[:, -args.action_size:] = action
 
 				# to get steering and target_speed as numpy
 				action = self.action.cpu().numpy()  # act dim : [batch_size, act_size]
-				action = self.enforce_limits(action[0], self.steering)  # size [act_size]
-				self.steering, self.target_speed = action[0], action[1]
-				self.action[0] = torch.tensor(action).to(self.action)
-
+				# action = self.enforce_limits(action[0], self.steering)  # size [act_size]
+				self.steering, self.target_speed = action[0][0], action[0][1]
+				# self.action[0] = torch.tensor(action).to(self.action)
+				# print("after limit ", self.action)
 				## didn't use enforce_limit yet
 				# self.steering, self.target_speed = self.enforce_limits(action, self.command_history[0]) # TODO: change this
 
