@@ -419,7 +419,7 @@ class Dreamer(Agent):
       action = Normal(action, self.args.expl_amount).rsample()
     action[:, 1] = 0.3
     # return action.cu().numpy()
-    # print(action)
+    print(action)
     return action  # this is a Tonsor.cuda
 
   def import_parameters(self, params):
