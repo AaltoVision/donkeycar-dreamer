@@ -85,6 +85,13 @@ parser.add_argument('--temp', type=float, default=0.2)
 
 parser.add_argument('--action_size', default=2)
 parser.add_argument('--observation_size', default=(3, 64, 64))
+
+# for action constrains
+parser.add_argument('--fix_speed', action='store_true')
+parser.add_argument('--throttle_min', default=0.2)
+parser.add_argument('--throttle_max', default=0.5)
+parser.add_argument('--angle_min', default=-1)
+parser.add_argument('--angle_max', default=1)
 args = parser.parse_args()
 
 wandb.init(project="donkey_sac")

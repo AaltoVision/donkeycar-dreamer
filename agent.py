@@ -39,6 +39,7 @@ def cal_returns(reward, value, bootstrap, pcont, lambda_):
   returns = torch.flip(torch.stack(outputs), [0])
   return returns
 
+
 def count_vars(module):
   """ count parameters number of module"""
   return sum([np.prod(p.shape) for p in module.parameters()])
@@ -111,7 +112,8 @@ class Dreamer(Agent):
             args.belief_size,
             args.state_size,
             args.hidden_size,
-            activation_function=args.dense_act).to(device=args.device)
+            activation_function=args.dense_act,
+		        fix_speed=args.fix_speed).to(device=args.device)
 
     self.value_model = ValueModel(
             args.belief_size,
@@ -233,10 +235,11 @@ class Dreamer(Agent):
     imag_values2 = bottle(self.value_model2, (imag_beliefs, imag_states))
     imag_values = torch.min(imag_values, imag_values2)
 
-    if self.args.pcont:
-      pcont = torch.distributions.Bernoulli(logits=bottle(self.pcont_model, (imag_beliefs, imag_states))).mean
-    else:
-      pcont = self.args.discount * torch.ones_like(imag_rewards)
+    with torch.no_grad():
+      if self.args.pcont:
+        pcont = bottle(self.pcont_model, (imag_beliefs, imag_states))
+      else:
+        pcont = self.args.discount * torch.ones_like(imag_rewards)
 
     if imag_ac_logps:
       imag_values[1:] -= self.args.temp * imag_ac_logps  # add entropy here
@@ -258,10 +261,13 @@ class Dreamer(Agent):
       target_imag_values2 = bottle(self.target_value_model2, (imag_beliefs, imag_states))
       target_imag_values = torch.min(target_imag_values, target_imag_values2)
       imag_rewards = bottle(self.reward_model, (imag_beliefs, imag_states))
+
+    with torch.no_grad():
       if self.args.pcont:
         pcont = bottle(self.pcont_model, (imag_beliefs, imag_states))
       else:
         pcont = self.args.discount * torch.ones_like(imag_rewards)
+
     # print("check pcont", pcont)
     if imag_ac_logps:
       target_imag_values[1:] -= self.args.temp * imag_ac_logps
@@ -417,8 +423,14 @@ class Dreamer(Agent):
     action, _ = self.actor_model(belief, posterior_state, deterministic=deterministic, with_logprob=False)
     if not deterministic:
       action = Normal(action, self.args.expl_amount).rsample()
-    action[:, 1] = 0.3
-    # return action.cu().numpy()
+    # clip the angle
+    action[:, 0].clamp_(min=self.args.angle_min, max=self.args.angle_max)
+    # clip the throttle
+    if self.args.fix_speed:
+      action[:, 1] = 0.3
+    else:
+      action[:, 1].clamp_(min=self.args.throttle_min, max=self.args.throttle_max)
+    # return action.cup().numpy()
     print(action)
     return action  # this is a Tonsor.cuda
 
