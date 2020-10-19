@@ -65,8 +65,8 @@ def define_config():
   # for action constrains
   args.throttle_min = 0.1
   args.throttle_max = 0.5
-  args.angle_min = -0.5
-  args.angle_max = 0.5
+  args.angle_min = -1
+  args.angle_max = 1
   # I didn't limit the max steering_diff yet
   args.max_steering_diff = 0.25
   args.step_length = 0.1
@@ -83,7 +83,7 @@ def define_config():
   # set up for experiments
   args.pcont = False  # whether to use a learned pcont
   args.with_logprob = False  # whether to use the soft actor-critic
-  args.fix_speed = False  # whether to use fixed speed
+  args.fix_speed = True  # whether to use fixed speed, fixed speed is 0.3
 
   return args
 
