@@ -113,7 +113,10 @@ class Dreamer(Agent):
             args.state_size,
             args.hidden_size,
             activation_function=args.dense_act,
-		        fix_speed=args.fix_speed).to(device=args.device)
+		        fix_speed=args.fix_speed,
+            throttle_base = args.throttle_base,
+            throttle_limit=(args.throttle_max-args.throttle_min) / 2,
+            angle_limit=(args.angle_max-args.angle_min) / 2).to(device=args.device)
 
     self.value_model = ValueModel(
             args.belief_size,
@@ -422,7 +425,10 @@ class Dreamer(Agent):
     belief, posterior_state = state
     action, _ = self.actor_model(belief, posterior_state, deterministic=deterministic, with_logprob=False)
     if not deterministic:
-      action = Normal(action, self.args.expl_amount).rsample()
+      expl_amount = torch.ones_like(action)
+      expl_amount[:,0] = 0.3*((self.args.angle_max - self.args.angle_min)/2)
+      expl_amount[:,1] = 0.3*(self.args.throttle_max - self.args.throttle_min)
+      action = Normal(action, expl_amount).rsample()
     # clip the angle
     action[:, 0].clamp_(min=self.args.angle_min, max=self.args.angle_max)
     # clip the throttle

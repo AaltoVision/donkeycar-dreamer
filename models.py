@@ -211,7 +211,8 @@ def Encoder(symbolic, observation_size, embedding_size, activation_function='rel
 
 
 class ActorModel(nn.Module):
-  def __init__(self, action_size, belief_size, state_size, hidden_size, mean_scale=5, min_std=1e-4, init_std=5, activation_function="elu", fix_speed=False):
+  def __init__(self, action_size, belief_size, state_size, hidden_size, mean_scale=5, min_std=1e-4, init_std=5,
+               activation_function="elu", fix_speed=False, throttle_base=0.3, throttle_limit=0.2, angle_limit=0.6):
     super().__init__()
     self.act_fn = getattr(F, activation_function)
     self.fc1 = nn.Linear(belief_size + state_size, hidden_size)
@@ -225,7 +226,10 @@ class ActorModel(nn.Module):
     self.init_std = init_std
     self.mean_scale = mean_scale
 
-    self.fix_speed=fix_speed
+    self.fix_speed = fix_speed
+    self.throttle_base = throttle_base
+    self.throttle_limit = throttle_limit
+    self.angle_limit = angle_limit
   # def forward(self, belief, state, deterministic=False, with_logprob=False):
   #   hidden = self.act_fn(self.fc1(torch.cat([belief, state], dim=-1)))
   #   # print("first hidden", hidden[0][1], self.fc1.weight[1])
@@ -267,7 +271,7 @@ class ActorModel(nn.Module):
   #   return pi_action, logp_pi
 
 
-  def forward(self, belief, state, deterministic=False, with_logprob=False, fix_speed=False):
+  def forward(self, belief, state, deterministic=False, with_logprob=False):
     raw_init_std = np.log(np.exp(self.init_std) - 1)
     hidden = self.act_fn(self.fc1(torch.cat([belief, state], dim=-1)))
     hidden = self.act_fn(self.fc2(hidden))
@@ -301,12 +305,12 @@ class ActorModel(nn.Module):
     # TanhTransform = ComposeTransform([AffineTransform(0., 2.), SigmoidTransform(), AffineTransform(-1., 2.)])
     if self.fix_speed:
       transform = [AffineTransform(0., 2.), SigmoidTransform(), AffineTransform(-1., 2.),  # TanhTransform
-                   AffineTransform(loc=torch.tensor([0.0, 0.3]).to("cuda"),
-                                  scale=torch.tensor([1.0, 0.0]).to("cuda"))]  # TODO: this is limited at donkeycar env
+                   AffineTransform(loc=torch.tensor([0.0, self.args.throttle_base]).to("cuda"),
+                                  scale=torch.tensor([self.angle_limit, 0.0]).to("cuda"))]  # TODO: this is limited at donkeycar env
     else:
       transform = [AffineTransform(0., 2.), SigmoidTransform(), AffineTransform(-1., 2.),  # TanhTransform
-                   AffineTransform(loc=torch.tensor([0.0, 0.3]).to("cuda"),
-                                  scale=torch.tensor([1.0, 0.2]).to("cuda"))]  # TODO: this is limited at donkeycar env
+                   AffineTransform(loc=torch.tensor([0.0, self.args.throttle_base]).to("cuda"),
+                                  scale=torch.tensor([self.angle_limit, self.throttle_limit]).to("cuda"))]  # TODO: this is limited at donkeycar env
 
     dist = TransformedDistribution(dist, transform)
     dist = torch.distributions.independent.Independent(dist, 1)  # Introduces dependence between actions dimension

@@ -9,7 +9,7 @@ from donkeycar.parts.network import MQTTValuePub, MQTTValueSub
 sys.path.insert(1, "/u/95/zhaoy13/unix/ICRA/donkeycar-dreamer")
 from agent import Dreamer
 import torch
-
+import wandb
 # import cv2
 
 parser = argparse.ArgumentParser()
@@ -411,8 +411,11 @@ class RL_Agent():
 
 
 if __name__ == "__main__":
+  wandb.init(project="dreamer_local")
   print("Starting as training server")
   args = define_config()
+  wandb.config.update(args)
+
   agent = RL_Agent("dreamer", True, args.car_name)
   params_sent = False
   buffer_received = False
@@ -430,6 +433,7 @@ if __name__ == "__main__":
     if (new_buffer[0] - 1) == prev_buffer and not trained:
       print("New buffer")
       print(f"{len(new_buffer[1])} new buffer observations")
+      wandb.log({"step": len(new_buffer[1])})
       agent.agent.append_buffer(new_buffer[1])
       prev_buffer += 1
       agent.replay_buffer_received_pub.run(prev_buffer)
