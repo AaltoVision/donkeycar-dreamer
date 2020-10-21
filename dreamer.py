@@ -47,6 +47,9 @@ parser.add_argument('--bit-depth', type=int, default=8, metavar='B', help='Image
 parser.add_argument('--world_lr', type=float, default=6e-4, metavar='α', help='Learning rate')
 parser.add_argument('--actor_lr', type=float, default=8e-5, metavar='α', help='Learning rate')
 parser.add_argument('--value_lr', type=float, default=8e-5, metavar='α', help='Learning rate')
+# parser.add_argument('--world_lr', type=float, default=1e-3, metavar='α', help='Learning rate')
+# parser.add_argument('--actor_lr', type=float, default=1e-4, metavar='α', help='Learning rate')
+# parser.add_argument('--value_lr', type=float, default=1e-4, metavar='α', help='Learning rate')
 parser.add_argument('--learning-rate-schedule', type=int, default=0, metavar='αS',
 										help='Linear learning rate schedule (optimisation steps from 0 to final learning rate; 0 to disable)')
 parser.add_argument('--adam-epsilon', type=float, default=1e-7, metavar='ε', help='Adam optimizer epsilon value')
@@ -70,7 +73,8 @@ parser.add_argument('--render', action='store_true', help='Render environment')
 # For pcont
 parser.add_argument('--pcont', action='store_true',
 										help='Wheter to predict the continuity, used to handle the terminal state')
-parser.add_argument('--pcont_scale', type=int, default=1, help='The coefficient term of the pcont loss')
+parser.add_argument('--pcont_scale', type=int, default=10, help='The coefficient term of the pcont loss')
+parser.add_argument('--reward_scale', type=int, default=10, help='the coefficient term of reward loss')
 # For donkey car
 parser.add_argument('--sim_path', type=str,
 										default='/u/95/zhaoy13/unix/summer/ICRA/donkey/DonkeySimLinux/donkey_sim.x86_64',
@@ -80,8 +84,7 @@ parser.add_argument('--host', type=str, default='127.0.0.1', help='host ip')
 # por sac
 parser.add_argument('--with_logprob', action='store_true')
 parser.add_argument('--use_automatic_entropy_tuning', action='store_true', help="Use the entropy regularization")
-parser.add_argument('--polyak', type=float, default=0.1)
-parser.add_argument('--temp', type=float, default=0.2)
+parser.add_argument('--temp', type=float, default=0.003)  # temp for entropy
 
 parser.add_argument('--action_size', default=2)
 parser.add_argument('--observation_size', default=(3, 64, 64))
@@ -89,10 +92,10 @@ parser.add_argument('--observation_size', default=(3, 64, 64))
 # for action constrains
 parser.add_argument('--fix_speed', action='store_true')
 parser.add_argument('--throttle_base', default=0.3)
-parser.add_argument('--throttle_min', default=0.2)
+parser.add_argument('--throttle_min', default=0.1)
 parser.add_argument('--throttle_max', default=0.5)
-parser.add_argument('--angle_min', default=-0.6)
-parser.add_argument('--angle_max', default=0.6)
+parser.add_argument('--angle_min', default=-1)
+parser.add_argument('--angle_max', default=1)
 args = parser.parse_args()
 
 wandb.init(project="donkey_sac")

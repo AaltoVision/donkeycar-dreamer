@@ -114,9 +114,7 @@ class Dreamer(Agent):
             args.hidden_size,
             activation_function=args.dense_act,
 		        fix_speed=args.fix_speed,
-            throttle_base = args.throttle_base,
-            throttle_limit=(args.throttle_max-args.throttle_min) / 2,
-            angle_limit=(args.angle_max-args.angle_min) / 2).to(device=args.device)
+            throttle_base=args.throttle_base).to(device=args.device)
 
     self.value_model = ValueModel(
             args.belief_size,
@@ -229,7 +227,7 @@ class Dreamer(Agent):
       # pcont_pred = torch.distributions.Bernoulli(logits=bottle(self.pcont_model, (beliefs, posterior_states)))
       # pcont_loss = -pcont_pred.log_prob(nonterminals[1:]).mean(dim=(0, 1))
 
-    return observation_loss, reward_loss, kl_loss, (self.args.pcont_scale * pcont_loss if self.args.pcont else 0)
+    return observation_loss, self.args.reward_scale * reward_loss, kl_loss, (self.args.pcont_scale * pcont_loss if self.args.pcont else 0)
 
   def _compute_loss_actor(self, imag_beliefs, imag_states, imag_ac_logps=None):
     # reward and value prediction of imagined trajectories
@@ -244,9 +242,8 @@ class Dreamer(Agent):
       else:
         pcont = self.args.discount * torch.ones_like(imag_rewards)
 
-    if imag_ac_logps:
-      imag_values[1:] -= self.args.temp * imag_ac_logps  # add entropy here
-
+      if imag_ac_logps is not None:
+        imag_values[1:] -= self.args.temp * imag_ac_logps  # add entropy here
     returns = cal_returns(imag_rewards[:-1], imag_values[:-1], imag_values[-1], pcont[:-1], lambda_=self.args.disclam)
 
     discount = torch.cumprod(torch.cat([torch.ones_like(pcont[:1]), pcont[:-2]], 0), 0)
@@ -272,8 +269,8 @@ class Dreamer(Agent):
         pcont = self.args.discount * torch.ones_like(imag_rewards)
 
     # print("check pcont", pcont)
-    if imag_ac_logps:
-      target_imag_values[1:] -= self.args.temp * imag_ac_logps
+      if imag_ac_logps is not None:
+        target_imag_values[1:] -= self.args.temp * imag_ac_logps
 
     returns = cal_returns(imag_rewards[:-1], target_imag_values[:-1], target_imag_values[-1], pcont[:-1], lambda_=self.args.disclam)
     target_return = returns.detach()
@@ -303,9 +300,9 @@ class Dreamer(Agent):
         imag_beliefs[-1].detach(),
         imag_states[-1].detach(),
         deterministic=False,
-        with_logprob=with_logprob
+        with_logprob=with_logprob,
       )
-      imag_action = imag_action.unsqueeze(dim=0)
+      imag_action = imag_action.unsqueeze(dim=0)  # add time dim
 
       # print(imag_states[-1].shape, imag_action.shape, imag_beliefs[-1].shape)
       imag_belief, imag_state, _, _ = self.transition_model(imag_states[-1], imag_action, imag_beliefs[-1])
@@ -366,9 +363,9 @@ class Dreamer(Agent):
 
       # latent imagination
       imag_beliefs, imag_states, imag_ac_logps = self._latent_imagination(beliefs, posterior_states, with_logprob=self.args.with_logprob)
-
+      print("imag_ac_logps", imag_ac_logps)
       # update actor
-      actor_loss = self._compute_loss_actor(imag_beliefs, imag_states, imag_ac_logps)
+      actor_loss = self._compute_loss_actor(imag_beliefs, imag_states, imag_ac_logps=imag_ac_logps)
 
       self.actor_optimizer.zero_grad()
       actor_loss.backward()
@@ -424,20 +421,17 @@ class Dreamer(Agent):
     # get action with the inputs get from fn: infer_state; return a numpy with shape [batch, act_size]
     belief, posterior_state = state
     action, _ = self.actor_model(belief, posterior_state, deterministic=deterministic, with_logprob=False)
-    if not deterministic:
-      expl_amount = torch.ones_like(action)
-      expl_amount[:,0] = 0.3*((self.args.angle_max - self.args.angle_min)/2)
-      expl_amount[:,1] = 0.3*(self.args.throttle_max - self.args.throttle_min)
-      action = Normal(action, expl_amount).rsample()
+    if not deterministic and not self.args.with_logprob:
+      action = Normal(action, self.args.expl_amount).rsample()
     # clip the angle
     action[:, 0].clamp_(min=self.args.angle_min, max=self.args.angle_max)
     # clip the throttle
     if self.args.fix_speed:
-      action[:, 1] = 0.3
+      action[:, 1] = self.args.throttle_base
     else:
       action[:, 1].clamp_(min=self.args.throttle_min, max=self.args.throttle_max)
+    print("action", action)
     # return action.cup().numpy()
-    print(action)
     return action  # this is a Tonsor.cuda
 
   def import_parameters(self, params):
