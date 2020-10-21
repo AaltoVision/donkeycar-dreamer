@@ -63,7 +63,7 @@ parser.add_argument('--discount', type=float, default=0.99, metavar='H', help='P
 parser.add_argument('--disclam', type=float, default=0.95, metavar='H', help='discount rate to compute return')
 
 parser.add_argument('--test', action='store_true', help='Test only')
-parser.add_argument('--test-interval', type=int, default=5, metavar='I', help='Test interval (episodes)')
+parser.add_argument('--test-interval', type=int, default=1, metavar='I', help='Test interval (episodes)')
 parser.add_argument('--test-episodes', type=int, default=1, metavar='E', help='Number of test episodes')  # for donkey env, since it can only use one car, just use test_epi=1 here, in other env, 10
 parser.add_argument('--checkpoint-interval', type=int, default=500, metavar='I', help='Checkpoint interval (episodes)')
 parser.add_argument('--checkpoint-experience', action='store_true', help='Checkpoint experience replay')
@@ -84,10 +84,10 @@ parser.add_argument('--host', type=str, default='127.0.0.1', help='host ip')
 # por sac
 parser.add_argument('--with_logprob', action='store_true')
 parser.add_argument('--use_automatic_entropy_tuning', action='store_true', help="Use the entropy regularization")
-parser.add_argument('--temp', type=float, default=0.003)  # temp for entropy
+parser.add_argument('--temp', type=float, default=0.003)  # temp for entropy  #TODO might try 0.03 and 0.1, don't know whether it's too small
 
 parser.add_argument('--action_size', default=2)
-parser.add_argument('--observation_size', default=(3, 64, 64))
+parser.add_argument('--observation_size', default=(1, 64, 64))
 
 # for action constrains
 parser.add_argument('--fix_speed', action='store_true')
@@ -279,7 +279,7 @@ for episode in tqdm(range(metrics['episodes'][-1] + 1, args.episodes + 1), total
 			agent.D.append(next_observation, action.cpu(), reward, done)  # TODO:2
 			total_reward += reward
 			observation = next_observation
-			print(bottle(agent.value_model, (belief.unsqueeze(dim=0), posterior_state.unsqueeze(dim=0))).item())
+			print("value", bottle(agent.value_model, (belief.unsqueeze(dim=0), posterior_state.unsqueeze(dim=0))).item())
 			if args.render:
 				env.render()
 			if done:
