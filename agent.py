@@ -9,7 +9,7 @@ from torch.distributions.kl import kl_divergence
 from torch.nn import functional as F
 from tqdm import tqdm
 # from memory import ExperienceReplay
-from memory2 import ExperienceReplay
+from memory import ExperienceReplay
 # from buffer import ExperienceReplay
 from models import bottle, Encoder, ObservationModel, RewardModel, TransitionModel, ValueModel, ActorModel, PCONTModel
 import cv2
