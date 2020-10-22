@@ -165,28 +165,22 @@ class Dreamer(Agent):
       # var_counts = tuple(count_vars(module) for module in [self., self.ac.q1, self.ac.q2])
       # print('\nNumber of parameters: \t pi: %d, \t q1: %d, \t q2: %d\n' % var_counts)
 
-  # def process_im(self, image, image_size=None, rgb=None):
-  #   # Resize, put channel first, convert it to a tensor, centre it to [-0.5, 0.5] and add batch dimenstion.
-  #
-  #   def preprocess_observation_(observation, bit_depth):
-  #     # Preprocesses an observation inplace (from float32 Tensor [0, 255] to [-0.5, 0.5])
-  #     observation.div_(2 ** (8 - bit_depth)).floor_().div_(2 ** bit_depth).sub_(
-  #       0.5)  # Quantise to given bit depth and centre
-  #     observation.add_(torch.rand_like(observation).div_(
-  #       2 ** bit_depth))  # Dequantise (to approx. match likelihood of PDF of continuous images vs. PMF of discrete images)
-  #
-  #   image = image[40:, :, :]  # clip the above 40 rows
-  #   image = torch.tensor(cv2.resize(image, (64, 64), interpolation=cv2.INTER_LINEAR).transpose(2, 0, 1),
-  #                         dtype=torch.float32)  # Resize and put channel first
-  #
-  #   preprocess_observation_(image, self.args.bit_depth)
-  #   return image.unsqueeze(dim=0)
-  def process_im(self, images, image_size=None, rgb=None):
-    images = images[40:, :, :]
-    images_gray = cv2.cvtColor(images, cv2.COLOR_RGB2GRAY)
-    obs = cv2.resize(images_gray, (40, 40), interpolation=cv2.INTER_LINEAR)
-    obs = torch.tensor(obs, dtype=torch.float32).div_(255.).sub_(0.5).unsqueeze(dim=0)  # shape [1, 40, 40], range:[0-1]
-    return obs.unsqueeze(dim=0)  # add batch dim
+  def process_im(self, image, image_size=None, rgb=None):
+    # Resize, put channel first, convert it to a tensor, centre it to [-0.5, 0.5] and add batch dimenstion.
+
+    def preprocess_observation_(observation, bit_depth):
+      # Preprocesses an observation inplace (from float32 Tensor [0, 255] to [-0.5, 0.5])
+      observation.div_(2 ** (8 - bit_depth)).floor_().div_(2 ** bit_depth).sub_(
+        0.5)  # Quantise to given bit depth and centre
+      observation.add_(torch.rand_like(observation).div_(
+        2 ** bit_depth))  # Dequantise (to approx. match likelihood of PDF of continuous images vs. PMF of discrete images)
+
+    image = image[40:, :, :]  # clip the above 40 rows
+    image = torch.tensor(cv2.resize(image, (64, 64), interpolation=cv2.INTER_LINEAR).transpose(2, 0, 1),
+                          dtype=torch.float32)  # Resize and put channel first
+
+    preprocess_observation_(image, self.args.bit_depth)
+    return image.unsqueeze(dim=0)
 
   def append_buffer(self, new_traj):
     # append new collected trajectory, not implement the data augmentation
@@ -247,11 +241,9 @@ class Dreamer(Agent):
         pcont = bottle(self.pcont_model, (imag_beliefs, imag_states))
       else:
         pcont = self.args.discount * torch.ones_like(imag_rewards)
-    pcont = pcont.detach()
 
-    if imag_ac_logps is not None:
-      imag_values[1:] -= self.args.temp * imag_ac_logps  # TODO: add entropy here , should keep its gradient
-
+      if imag_ac_logps is not None:
+        imag_values[1:] -= self.args.temp * imag_ac_logps  # add entropy here
     returns = cal_returns(imag_rewards[:-1], imag_values[:-1], imag_values[-1], pcont[:-1], lambda_=self.args.disclam)
 
     discount = torch.cumprod(torch.cat([torch.ones_like(pcont[:1]), pcont[:-2]], 0), 0)
@@ -270,11 +262,13 @@ class Dreamer(Agent):
       target_imag_values = torch.min(target_imag_values, target_imag_values2)
       imag_rewards = bottle(self.reward_model, (imag_beliefs, imag_states))
 
+    with torch.no_grad():
       if self.args.pcont:
         pcont = bottle(self.pcont_model, (imag_beliefs, imag_states))
       else:
         pcont = self.args.discount * torch.ones_like(imag_rewards)
-      # print("check pcont", pcont)
+
+    # print("check pcont", pcont)
       if imag_ac_logps is not None:
         target_imag_values[1:] -= self.args.temp * imag_ac_logps
 
@@ -288,7 +282,7 @@ class Dreamer(Agent):
     value_loss2 = F.mse_loss(value_pred2, target_return, reduction="none").mean(dim=(0, 1))
     value_loss += value_loss2
 
-    return 0.5 * value_loss
+    return value_loss
 
   def _latent_imagination(self, beliefs, posterior_states, with_logprob=False):
     # Rollout to generate imagined trajectories
@@ -369,6 +363,7 @@ class Dreamer(Agent):
 
       # latent imagination
       imag_beliefs, imag_states, imag_ac_logps = self._latent_imagination(beliefs, posterior_states, with_logprob=self.args.with_logprob)
+      print("imag_ac_logps", imag_ac_logps)
       # update actor
       actor_loss = self._compute_loss_actor(imag_beliefs, imag_states, imag_ac_logps=imag_ac_logps)
 
@@ -426,16 +421,16 @@ class Dreamer(Agent):
     # get action with the inputs get from fn: infer_state; return a numpy with shape [batch, act_size]
     belief, posterior_state = state
     action, _ = self.actor_model(belief, posterior_state, deterministic=deterministic, with_logprob=False)
-    if (not deterministic) and (not self.args.with_logprob):
+    if not deterministic and not self.args.with_logprob:
       action = Normal(action, self.args.expl_amount).rsample()
     # clip the angle
-    if not self.args.with_logprob:
-      action[:, 0].clamp_(min=self.args.angle_min, max=self.args.angle_max)
-      # clip the throttle
-      if self.args.fix_speed:
-        action[:, 1] = self.args.throttle_base
-      else:
-        action[:, 1].clamp_(min=self.args.throttle_min, max=self.args.throttle_max)
+    action[:, 0].clamp_(min=self.args.angle_min, max=self.args.angle_max)
+    # clip the throttle
+    if self.args.fix_speed:
+      action[:, 1] = self.args.throttle_base
+    else:
+      action[:, 1].clamp_(min=self.args.throttle_min, max=self.args.throttle_max)
+    print("action", action)
     # return action.cup().numpy()
     return action  # this is a Tonsor.cuda
 

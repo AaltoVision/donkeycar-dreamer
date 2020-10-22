@@ -38,7 +38,7 @@ def define_config():
 	args.state_size = 30
 	args.hidden_size = 300
 	args.embedding_size = 1024
-	args.observation_size = (1, 40, 40)  # TODO: change this latter
+	args.observation_size = (3, 64, 64)  # TODO: change this latter
 	args.action_size = 2  # TODO: change this latter
 	args.device = "cuda" if torch.cuda.is_available() else "cpu"
 	args.testing_device = "cpu"
@@ -47,7 +47,6 @@ def define_config():
 	args.cnn_act = 'relu'
 
 	args.pcont_scale = 5
-	args.reward_scale = 5
 	args.world_lr = 6e-4
 	args.actor_lr = 8e-5
 	args.value_lr = 8e-5
@@ -86,9 +85,8 @@ def define_config():
 	# set up for experiments
 	args.pcont = False  # whether to use a learned pcont
 	args.with_logprob = False  # whether to use the soft actor-critic
-	args.fix_speed = True  # whether to use fixed speed, fixed speed is 0.3
+	args.fix_speed = False  # whether to use fixed speed, fixed speed is 0.3
 
-	args.temp = 0.003
 	return args
 
 
@@ -255,7 +253,7 @@ class RL_Agent():
 
 		if self.step > 0 and not self.training:
 			"""Save observation to replay buffer"""
-			reward = 1 + (self.speed - self.args.throttle_min) / (self.args.throttle_max - self.args.throttle_min)
+			reward = 1 + 0.5 * (self.speed - self.args.throttle_min) / (self.args.throttle_max - self.args.throttle_min)
 			# reward = min(reward, 2) / 2
 			# reward = self.speed + 1
 			done = self.dead

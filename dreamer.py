@@ -73,8 +73,8 @@ parser.add_argument('--render', action='store_true', help='Render environment')
 # For pcont
 parser.add_argument('--pcont', action='store_true',
 										help='Wheter to predict the continuity, used to handle the terminal state')
-parser.add_argument('--pcont_scale', type=int, default=5, help='The coefficient term of the pcont loss')
-parser.add_argument('--reward_scale', type=int, default=5, help='the coefficient term of reward loss')
+parser.add_argument('--pcont_scale', type=int, default=10, help='The coefficient term of the pcont loss')
+parser.add_argument('--reward_scale', type=int, default=10, help='the coefficient term of reward loss')
 # For donkey car
 parser.add_argument('--sim_path', type=str,
 										default='/u/95/zhaoy13/unix/summer/ICRA/donkey/DonkeySimLinux/donkey_sim.x86_64',
@@ -84,16 +84,16 @@ parser.add_argument('--host', type=str, default='127.0.0.1', help='host ip')
 # por sac
 parser.add_argument('--with_logprob', action='store_true')
 parser.add_argument('--use_automatic_entropy_tuning', action='store_true', help="Use the entropy regularization")
-parser.add_argument('--temp', type=float, default=0.003)  # temp for entropy  #TODO might try 0.03, don't know whether it's too small
+parser.add_argument('--temp', type=float, default=0.003)  # temp for entropy
 
 parser.add_argument('--action_size', default=2)
-parser.add_argument('--observation_size', default=(1, 40, 40))
+parser.add_argument('--observation_size', default=(3, 64, 64))
 
 # for action constrains
 parser.add_argument('--fix_speed', action='store_true')
 parser.add_argument('--throttle_base', default=0.3)
-parser.add_argument('--throttle_min', default=0.2)
-parser.add_argument('--throttle_max', default=0.6)
+parser.add_argument('--throttle_min', default=0.1)
+parser.add_argument('--throttle_max', default=0.5)
 parser.add_argument('--angle_min', default=-1)
 parser.add_argument('--angle_max', default=1)
 args = parser.parse_args()
@@ -279,7 +279,7 @@ for episode in tqdm(range(metrics['episodes'][-1] + 1, args.episodes + 1), total
 			agent.D.append(next_observation, action.cpu(), reward, done)  # TODO:2
 			total_reward += reward
 			observation = next_observation
-			print("value", bottle(agent.value_model, (belief.unsqueeze(dim=0), posterior_state.unsqueeze(dim=0))).item())
+			print(bottle(agent.value_model, (belief.unsqueeze(dim=0), posterior_state.unsqueeze(dim=0))).item())
 			if args.render:
 				env.render()
 			if done:

@@ -104,14 +104,10 @@ class VisualObservationModel(jit.ScriptModule):
     self.act_fn = getattr(F, activation_function)
     self.embedding_size = embedding_size
     self.fc1 = nn.Linear(belief_size + state_size, embedding_size)
-    self.conv1 = nn.ConvTranspose2d(embedding_size, 128, 3, stride=2)
-    self.conv2 = nn.ConvTranspose2d(128, 64, 4, stride=2)
-    self.conv3 = nn.ConvTranspose2d(64, 32, 4, stride=2)
-    self.conv4 = nn.ConvTranspose2d(32, 1, 6, stride=2)
-    # self.conv1 = nn.ConvTranspose2d(embedding_size, 128, 5, stride=2)
-    # self.conv2 = nn.ConvTranspose2d(128, 64, 5, stride=2)
-    # self.conv3 = nn.ConvTranspose2d(64, 32, 6, stride=2)
-    # self.conv4 = nn.ConvTranspose2d(32, 1, 6, stride=2)
+    self.conv1 = nn.ConvTranspose2d(embedding_size, 128, 5, stride=2)
+    self.conv2 = nn.ConvTranspose2d(128, 64, 5, stride=2)
+    self.conv3 = nn.ConvTranspose2d(64, 32, 6, stride=2)
+    self.conv4 = nn.ConvTranspose2d(32, 3, 6, stride=2)
 
   @jit.script_method
   def forward(self, belief, state):
@@ -129,57 +125,6 @@ def ObservationModel(symbolic, observation_size, belief_size, state_size, embedd
     return SymbolicObservationModel(observation_size, belief_size, state_size, embedding_size, activation_function)
   else:
     return VisualObservationModel(belief_size, state_size, embedding_size, activation_function)
-
-
-class SymbolicEncoder(jit.ScriptModule):
-  def __init__(self, observation_size, embedding_size, activation_function='relu'):
-    super().__init__()
-    self.act_fn = getattr(F, activation_function)
-    self.fc1 = nn.Linear(observation_size, embedding_size)
-    self.fc2 = nn.Linear(embedding_size, embedding_size)
-    self.fc3 = nn.Linear(embedding_size, embedding_size)
-
-  @jit.script_method
-  def forward(self, observation):
-    hidden = self.act_fn(self.fc1(observation))
-    hidden = self.act_fn(self.fc2(hidden))
-    hidden = self.fc3(hidden)
-    return hidden
-
-
-class VisualEncoder(jit.ScriptModule):
-  __constants__ = ['embedding_size']
-
-  def __init__(self, embedding_size, activation_function='relu'):
-    super().__init__()
-    self.act_fn = getattr(F, activation_function)
-    self.embedding_size = embedding_size
-    self.conv1 = nn.Conv2d(1, 32, 4, stride=2)
-    self.conv2 = nn.Conv2d(32, 64, 3, stride=2)
-    self.conv3 = nn.Conv2d(64, 128, 3, stride=2)
-    self.conv4 = nn.Conv2d(128, 256, 3, )
-    # self.conv1 = nn.Conv2d(1, 32, 4, stride=2)
-    # self.conv2 = nn.Conv2d(32, 64, 4, stride=2)
-    # self.conv3 = nn.Conv2d(64, 128, 4, stride=2)
-    # self.conv4 = nn.Conv2d(128, 256, 4, stride=2)
-    self.fc = nn.Identity() if embedding_size == 1024 else nn.Linear(1024, embedding_size)
-
-  @jit.script_method
-  def forward(self, observation):
-    hidden = self.act_fn(self.conv1(observation))
-    hidden = self.act_fn(self.conv2(hidden))
-    hidden = self.act_fn(self.conv3(hidden))
-    hidden = self.act_fn(self.conv4(hidden))
-    hidden = hidden.view(-1, 1024)
-    hidden = self.fc(hidden)  # Identity if embedding size is 1024 else linear projection
-    return hidden
-
-
-def Encoder(symbolic, observation_size, embedding_size, activation_function='relu'):
-  if symbolic:
-    return SymbolicEncoder(observation_size, embedding_size, activation_function)
-  else:
-    return VisualEncoder(embedding_size, activation_function)
 
 
 class RewardModel(jit.ScriptModule):
@@ -218,25 +163,71 @@ class ValueModel(nn.Module):
     return reward
 
 
+class SymbolicEncoder(jit.ScriptModule):
+  def __init__(self, observation_size, embedding_size, activation_function='relu'):
+    super().__init__()
+    self.act_fn = getattr(F, activation_function)
+    self.fc1 = nn.Linear(observation_size, embedding_size)
+    self.fc2 = nn.Linear(embedding_size, embedding_size)
+    self.fc3 = nn.Linear(embedding_size, embedding_size)
+
+  @jit.script_method
+  def forward(self, observation):
+    hidden = self.act_fn(self.fc1(observation))
+    hidden = self.act_fn(self.fc2(hidden))
+    hidden = self.fc3(hidden)
+    return hidden
+
+
+class VisualEncoder(jit.ScriptModule):
+  __constants__ = ['embedding_size']
+  
+  def __init__(self, embedding_size, activation_function='relu'):
+    super().__init__()
+    self.act_fn = getattr(F, activation_function)
+    self.embedding_size = embedding_size
+    self.conv1 = nn.Conv2d(3, 32, 4, stride=2)
+    self.conv2 = nn.Conv2d(32, 64, 4, stride=2)
+    self.conv3 = nn.Conv2d(64, 128, 4, stride=2)
+    self.conv4 = nn.Conv2d(128, 256, 4, stride=2)
+    self.fc = nn.Identity() if embedding_size == 1024 else nn.Linear(1024, embedding_size)
+
+  @jit.script_method
+  def forward(self, observation):
+    hidden = self.act_fn(self.conv1(observation))
+    hidden = self.act_fn(self.conv2(hidden))
+    hidden = self.act_fn(self.conv3(hidden))
+    hidden = self.act_fn(self.conv4(hidden))
+    hidden = hidden.view(-1, 1024)
+    hidden = self.fc(hidden)  # Identity if embedding size is 1024 else linear projection
+    return hidden
+
+
+def Encoder(symbolic, observation_size, embedding_size, activation_function='relu'):
+  if symbolic:
+    return SymbolicEncoder(observation_size, embedding_size, activation_function)
+  else:
+    return VisualEncoder(embedding_size, activation_function)
+
+
 class ActorModel(nn.Module):
   def __init__(self, action_size, belief_size, state_size, hidden_size, mean_scale=5, min_std=1e-4, init_std=5, activation_function="elu",
                fix_speed=False, throttle_base=0.3):
     super().__init__()
-    self.fix_speed = fix_speed
-    self.throtlle_base = throttle_base
     self.act_fn = getattr(F, activation_function)
     self.fc1 = nn.Linear(belief_size + state_size, hidden_size)
     self.fc2 = nn.Linear(hidden_size, hidden_size)
     self.fc3 = nn.Linear(hidden_size, hidden_size)
     self.fc4 = nn.Linear(hidden_size, hidden_size)
-    if self.fix_speed:
-      self.fc5 = nn.Linear(hidden_size, 2*(action_size-1))  # only use steering
-    else:
-      self.fc5 = nn.Linear(hidden_size, 2 * (action_size))
+
+    # self.fc5 = nn.Linear(hidden_size, 2 * (action_size-1)) # TODO: only predict the direction, remove this latter
+    self.fc5 = nn.Linear(hidden_size, 2 * (action_size))
     self.min_std = min_std
     self.init_std = init_std
     self.mean_scale = mean_scale
 
+    self.fix_speed = fix_speed
+    self.throtlle_base = throttle_base
   # def forward(self, belief, state, deterministic=False, with_logprob=False):
   #   hidden = self.act_fn(self.fc1(torch.cat([belief, state], dim=-1)))
   #   # print("first hidden", hidden[0][1], self.fc1.weight[1])
@@ -311,11 +302,9 @@ class ActorModel(nn.Module):
     dist = torch.distributions.Normal(mean, std)
     # TanhTransform = ComposeTransform([AffineTransform(0., 2.), SigmoidTransform(), AffineTransform(-1., 2.)])
     if self.fix_speed:
-      # transform = [AffineTransform(0., 2.), SigmoidTransform(), AffineTransform(-1., 2.),  # TanhTransform
-      #              AffineTransform(loc=torch.tensor([0.0, self.throtlle_base]).to("cuda"),
-      #                             scale=torch.tensor([1.0, 0.0]).to("cuda"))]  # TODO: this is limited at donkeycar env
-      transform = [AffineTransform(0., 2.), SigmoidTransform(), AffineTransform(-1., 2.),]  # TanhTransform
-
+      transform = [AffineTransform(0., 2.), SigmoidTransform(), AffineTransform(-1., 2.),  # TanhTransform
+                   AffineTransform(loc=torch.tensor([0.0, self.throtlle_base]).to("cuda"),
+                                  scale=torch.tensor([1.0, 0.0]).to("cuda"))]  # TODO: this is limited at donkeycar env
     else:
       transform = [AffineTransform(0., 2.), SigmoidTransform(), AffineTransform(-1., 2.),  # TanhTransform
                    AffineTransform(loc=torch.tensor([0.0, self.throtlle_base]).to("cuda"),
@@ -330,13 +319,19 @@ class ActorModel(nn.Module):
     else:
       action = dist.rsample()
 
+    logp_pi = dist.log_prob(action)
+    print(logp_pi[:, 0])
     # not use logprob now
     if with_logprob:
-      logp_pi = dist.log_prob(action).sum(dim=1)
+      if self.fix_speed:  # if fix speed, the entropy of speed is nan # TODO: problem here
+        logp_pi = dist.log_prob(action)[:, 0]  # only consider the entropy of the
+      else:
+        logp_pi = dist.log_prob(action).sum(dim=1)
     else:
       logp_pi = None
     # action dim: [batch, act_dim], log_pi dim:[batch]
-    return action if not self.fix_speed else torch.cat((action, 0.3*torch.ones_like(action, requires_grad=False)), dim=-1), logp_pi  # dist ~ tanh(Normal(mean, std)); remember when sampling, using rsample() to adopt the reparameterization trick
+    return action, logp_pi  # dist ~ tanh(Normal(mean, std)); remember when sampling, using rsample() to adopt the reparameterization trick
+
 
 
 class SampleDist:
