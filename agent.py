@@ -8,8 +8,8 @@ from torch.distributions.independent import Independent
 from torch.distributions.kl import kl_divergence
 from torch.nn import functional as F
 from tqdm import tqdm
-from memory import ExperienceReplay
-# from memory2 import ExperienceReplay
+# from memory import ExperienceReplay
+from memory2 import ExperienceReplay
 # from buffer import ExperienceReplay
 from models import bottle, Encoder, ObservationModel, RewardModel, TransitionModel, ValueModel, ActorModel, PCONTModel
 import cv2
@@ -251,6 +251,7 @@ class Dreamer(Agent):
 
     if imag_ac_logps is not None:
       imag_values[1:] -= self.args.temp * imag_ac_logps.detach()  # TODO: add entropy here , should keep its gradient
+
     returns = cal_returns(imag_rewards[:-1], imag_values[:-1], imag_values[-1], pcont[:-1], lambda_=self.args.disclam)
 
     discount = torch.cumprod(torch.cat([torch.ones_like(pcont[:1]), pcont[:-2]], 0), 0)
@@ -287,7 +288,7 @@ class Dreamer(Agent):
     value_loss2 = F.mse_loss(value_pred2, target_return, reduction="none").mean(dim=(0, 1))
     value_loss += value_loss2
 
-    return value_loss
+    return 0.5 * value_loss
 
   def _latent_imagination(self, beliefs, posterior_states, with_logprob=False):
     # Rollout to generate imagined trajectories
@@ -425,7 +426,7 @@ class Dreamer(Agent):
     # get action with the inputs get from fn: infer_state; return a numpy with shape [batch, act_size]
     belief, posterior_state = state
     action, _ = self.actor_model(belief, posterior_state, deterministic=deterministic, with_logprob=False)
-    if not deterministic and not self.args.with_logprob:
+    if (not deterministic) and (not self.args.with_logprob):
       action = Normal(action, self.args.expl_amount).rsample()
     # clip the angle
     action[:, 0].clamp_(min=self.args.angle_min, max=self.args.angle_max)
