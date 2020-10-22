@@ -8,8 +8,8 @@ from torch.distributions.independent import Independent
 from torch.distributions.kl import kl_divergence
 from torch.nn import functional as F
 from tqdm import tqdm
-# from memory import ExperienceReplay
-from memory2 import ExperienceReplay
+from memory import ExperienceReplay
+# from memory2 import ExperienceReplay
 # from buffer import ExperienceReplay
 from models import bottle, Encoder, ObservationModel, RewardModel, TransitionModel, ValueModel, ActorModel, PCONTModel
 import cv2
@@ -250,7 +250,7 @@ class Dreamer(Agent):
     pcont = pcont.detach()
 
     if imag_ac_logps is not None:
-      imag_values[1:] -= self.args.temp * imag_ac_logps.detach()  # TODO: add entropy here , should keep its gradient
+      imag_values[1:] -= self.args.temp * imag_ac_logps  # TODO: add entropy here , should keep its gradient
 
     returns = cal_returns(imag_rewards[:-1], imag_values[:-1], imag_values[-1], pcont[:-1], lambda_=self.args.disclam)
 
@@ -429,12 +429,13 @@ class Dreamer(Agent):
     if (not deterministic) and (not self.args.with_logprob):
       action = Normal(action, self.args.expl_amount).rsample()
     # clip the angle
-    action[:, 0].clamp_(min=self.args.angle_min, max=self.args.angle_max)
-    # clip the throttle
-    if self.args.fix_speed:
-      action[:, 1] = self.args.throttle_base
-    else:
-      action[:, 1].clamp_(min=self.args.throttle_min, max=self.args.throttle_max)
+    if not self.args.with_logprob:
+      action[:, 0].clamp_(min=self.args.angle_min, max=self.args.angle_max)
+      # clip the throttle
+      if self.args.fix_speed:
+        action[:, 1] = self.args.throttle_base
+      else:
+        action[:, 1].clamp_(min=self.args.throttle_min, max=self.args.throttle_max)
     # return action.cup().numpy()
     return action  # this is a Tonsor.cuda
 
