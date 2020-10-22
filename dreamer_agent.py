@@ -38,7 +38,7 @@ def define_config():
 	args.state_size = 30
 	args.hidden_size = 300
 	args.embedding_size = 1024
-	args.observation_size = (3, 64, 64)  # TODO: change this latter
+	args.observation_size = (1, 40, 40)  # TODO: change this latter
 	args.action_size = 2  # TODO: change this latter
 	args.device = "cuda" if torch.cuda.is_available() else "cpu"
 	args.testing_device = "cpu"
@@ -84,8 +84,8 @@ def define_config():
 
 	# set up for experiments
 	args.pcont = False  # whether to use a learned pcont
-	args.with_logprob = False  # whether to use the soft actor-critic
-	args.fix_speed = False  # whether to use fixed speed, fixed speed is 0.3
+	args.with_logprob = True  # whether to use the soft actor-critic
+	args.fix_speed = True  # whether to use fixed speed, fixed speed is 0.3
 
 	return args
 
