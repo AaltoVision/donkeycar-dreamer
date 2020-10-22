@@ -215,19 +215,21 @@ class ActorModel(nn.Module):
                fix_speed=False, throttle_base=0.3):
     super().__init__()
     self.act_fn = getattr(F, activation_function)
+    self.fix_speed = fix_speed
+    self.throtlle_base = throttle_base
     self.fc1 = nn.Linear(belief_size + state_size, hidden_size)
     self.fc2 = nn.Linear(hidden_size, hidden_size)
     self.fc3 = nn.Linear(hidden_size, hidden_size)
     self.fc4 = nn.Linear(hidden_size, hidden_size)
-
-    # self.fc5 = nn.Linear(hidden_size, 2 * (action_size-1)) # TODO: only predict the direction, remove this latter
-    self.fc5 = nn.Linear(hidden_size, 2 * (action_size))
+    if self.fix_speed:
+      self.fc5 = nn.Linear(hidden_size, 2 * (action_size-1))  # TODO: only predict the direction, remove this latter
+    else:
+      self.fc5 = nn.Linear(hidden_size, 2 * (action_size))
     self.min_std = min_std
     self.init_std = init_std
     self.mean_scale = mean_scale
 
-    self.fix_speed = fix_speed
-    self.throtlle_base = throttle_base
+
   # def forward(self, belief, state, deterministic=False, with_logprob=False):
   #   hidden = self.act_fn(self.fc1(torch.cat([belief, state], dim=-1)))
   #   # print("first hidden", hidden[0][1], self.fc1.weight[1])
@@ -302,9 +304,8 @@ class ActorModel(nn.Module):
     dist = torch.distributions.Normal(mean, std)
     # TanhTransform = ComposeTransform([AffineTransform(0., 2.), SigmoidTransform(), AffineTransform(-1., 2.)])
     if self.fix_speed:
-      transform = [AffineTransform(0., 2.), SigmoidTransform(), AffineTransform(-1., 2.),  # TanhTransform
-                   AffineTransform(loc=torch.tensor([0.0, self.throtlle_base]).to("cuda"),
-                                  scale=torch.tensor([1.0, 0.0]).to("cuda"))]  # TODO: this is limited at donkeycar env
+      transform = [AffineTransform(0., 2.), SigmoidTransform(), AffineTransform(-1., 2.)]
+
     else:
       transform = [AffineTransform(0., 2.), SigmoidTransform(), AffineTransform(-1., 2.),  # TanhTransform
                    AffineTransform(loc=torch.tensor([0.0, self.throtlle_base]).to("cuda"),
@@ -319,18 +320,13 @@ class ActorModel(nn.Module):
     else:
       action = dist.rsample()
 
-    logp_pi = dist.log_prob(action)
-    print(logp_pi[:, 0])
     # not use logprob now
     if with_logprob:
-      if self.fix_speed:  # if fix speed, the entropy of speed is nan # TODO: problem here
-        logp_pi = dist.log_prob(action)[:, 0]  # only consider the entropy of the
-      else:
-        logp_pi = dist.log_prob(action).sum(dim=1)
+      logp_pi = dist.log_prob(action).sum(dim=1)
     else:
       logp_pi = None
     # action dim: [batch, act_dim], log_pi dim:[batch]
-    return action, logp_pi  # dist ~ tanh(Normal(mean, std)); remember when sampling, using rsample() to adopt the reparameterization trick
+    return action if not self.fix_speed else torch.cat((action, self.throtlle_base*torch.ones_like(action, requires_grad=False)), dim=-1), logp_pi  # dist ~ tanh(Normal(mean, std)); remember when sampling, using rsample() to adopt the reparameterization trick
 
 
 

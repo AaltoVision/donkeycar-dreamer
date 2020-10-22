@@ -241,9 +241,11 @@ class Dreamer(Agent):
         pcont = bottle(self.pcont_model, (imag_beliefs, imag_states))
       else:
         pcont = self.args.discount * torch.ones_like(imag_rewards)
+    pcont = pcont.detach()
 
-      if imag_ac_logps is not None:
-        imag_values[1:] -= self.args.temp * imag_ac_logps  # add entropy here
+    if imag_ac_logps is not None:
+      imag_values[1:] -= self.args.temp * imag_ac_logps  # add entropy here
+
     returns = cal_returns(imag_rewards[:-1], imag_values[:-1], imag_values[-1], pcont[:-1], lambda_=self.args.disclam)
 
     discount = torch.cumprod(torch.cat([torch.ones_like(pcont[:1]), pcont[:-2]], 0), 0)
@@ -262,7 +264,6 @@ class Dreamer(Agent):
       target_imag_values = torch.min(target_imag_values, target_imag_values2)
       imag_rewards = bottle(self.reward_model, (imag_beliefs, imag_states))
 
-    with torch.no_grad():
       if self.args.pcont:
         pcont = bottle(self.pcont_model, (imag_beliefs, imag_states))
       else:
@@ -423,13 +424,14 @@ class Dreamer(Agent):
     action, _ = self.actor_model(belief, posterior_state, deterministic=deterministic, with_logprob=False)
     if not deterministic and not self.args.with_logprob:
       action = Normal(action, self.args.expl_amount).rsample()
-    # clip the angle
-    action[:, 0].clamp_(min=self.args.angle_min, max=self.args.angle_max)
-    # clip the throttle
-    if self.args.fix_speed:
-      action[:, 1] = self.args.throttle_base
-    else:
-      action[:, 1].clamp_(min=self.args.throttle_min, max=self.args.throttle_max)
+
+      # clip the angle
+      action[:, 0].clamp_(min=self.args.angle_min, max=self.args.angle_max)
+      # clip the throttle
+      if self.args.fix_speed:
+        action[:, 1] = self.args.throttle_base
+      else:
+        action[:, 1].clamp_(min=self.args.throttle_min, max=self.args.throttle_max)
     print("action", action)
     # return action.cup().numpy()
     return action  # this is a Tonsor.cuda
