@@ -63,7 +63,7 @@ parser.add_argument('--discount', type=float, default=0.99, metavar='H', help='P
 parser.add_argument('--disclam', type=float, default=0.95, metavar='H', help='discount rate to compute return')
 
 parser.add_argument('--test', action='store_true', help='Test only')
-parser.add_argument('--test-interval', type=int, default=1, metavar='I', help='Test interval (episodes)')
+parser.add_argument('--test-interval', type=int, default=5, metavar='I', help='Test interval (episodes)')
 parser.add_argument('--test-episodes', type=int, default=1, metavar='E', help='Number of test episodes')  # for donkey env, since it can only use one car, just use test_epi=1 here, in other env, 10
 parser.add_argument('--checkpoint-interval', type=int, default=500, metavar='I', help='Checkpoint interval (episodes)')
 parser.add_argument('--checkpoint-experience', action='store_true', help='Checkpoint experience replay')
@@ -73,8 +73,8 @@ parser.add_argument('--render', action='store_true', help='Render environment')
 # For pcont
 parser.add_argument('--pcont', action='store_true',
 										help='Wheter to predict the continuity, used to handle the terminal state')
-parser.add_argument('--pcont_scale', type=int, default=10, help='The coefficient term of the pcont loss')
-parser.add_argument('--reward_scale', type=int, default=10, help='the coefficient term of reward loss')
+parser.add_argument('--pcont_scale', type=int, default=5, help='The coefficient term of the pcont loss')
+parser.add_argument('--reward_scale', type=int, default=5, help='the coefficient term of reward loss')
 # For donkey car
 parser.add_argument('--sim_path', type=str,
 										default='/u/95/zhaoy13/unix/summer/ICRA/donkey/DonkeySimLinux/donkey_sim.x86_64',
@@ -84,16 +84,16 @@ parser.add_argument('--host', type=str, default='127.0.0.1', help='host ip')
 # por sac
 parser.add_argument('--with_logprob', action='store_true')
 parser.add_argument('--use_automatic_entropy_tuning', action='store_true', help="Use the entropy regularization")
-parser.add_argument('--temp', type=float, default=0.003)  # temp for entropy  #TODO might try 0.03 and 0.1, don't know whether it's too small
+parser.add_argument('--temp', type=float, default=0.003)  # temp for entropy  #TODO might try 0.03, don't know whether it's too small
 
 parser.add_argument('--action_size', default=2)
-parser.add_argument('--observation_size', default=(1, 64, 64))
+parser.add_argument('--observation_size', default=(1, 40, 40))
 
 # for action constrains
 parser.add_argument('--fix_speed', action='store_true')
 parser.add_argument('--throttle_base', default=0.3)
-parser.add_argument('--throttle_min', default=0.1)
-parser.add_argument('--throttle_max', default=0.5)
+parser.add_argument('--throttle_min', default=0.2)
+parser.add_argument('--throttle_max', default=0.6)
 parser.add_argument('--angle_min', default=-1)
 parser.add_argument('--angle_max', default=1)
 args = parser.parse_args()

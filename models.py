@@ -104,14 +104,14 @@ class VisualObservationModel(jit.ScriptModule):
     self.act_fn = getattr(F, activation_function)
     self.embedding_size = embedding_size
     self.fc1 = nn.Linear(belief_size + state_size, embedding_size)
-    # self.conv1 = nn.ConvTranspose2d(embedding_size, 128, 3, stride=2)
-    # self.conv2 = nn.ConvTranspose2d(128, 64, 3, stride=2, output_padding=1)
-    # self.conv3 = nn.ConvTranspose2d(64, 32, 5, stride=2)
-    # self.conv4 = nn.ConvTranspose2d(32, 1, 4, stride=2)
-    self.conv1 = nn.ConvTranspose2d(embedding_size, 128, 5, stride=2)
-    self.conv2 = nn.ConvTranspose2d(128, 64, 5, stride=2)
-    self.conv3 = nn.ConvTranspose2d(64, 32, 6, stride=2)
+    self.conv1 = nn.ConvTranspose2d(embedding_size, 128, 3, stride=2)
+    self.conv2 = nn.ConvTranspose2d(128, 64, 4, stride=2)
+    self.conv3 = nn.ConvTranspose2d(64, 32, 4, stride=2)
     self.conv4 = nn.ConvTranspose2d(32, 1, 6, stride=2)
+    # self.conv1 = nn.ConvTranspose2d(embedding_size, 128, 5, stride=2)
+    # self.conv2 = nn.ConvTranspose2d(128, 64, 5, stride=2)
+    # self.conv3 = nn.ConvTranspose2d(64, 32, 6, stride=2)
+    # self.conv4 = nn.ConvTranspose2d(32, 1, 6, stride=2)
 
   @jit.script_method
   def forward(self, belief, state):
@@ -154,14 +154,14 @@ class VisualEncoder(jit.ScriptModule):
     super().__init__()
     self.act_fn = getattr(F, activation_function)
     self.embedding_size = embedding_size
-    # self.conv1 = nn.Conv2d(1, 32, 4, stride=2)
-    # self.conv2 = nn.Conv2d(32, 64, 3, stride=2)
-    # self.conv3 = nn.Conv2d(64, 128, 3, stride=2)
-    # self.conv4 = nn.Conv2d(128, 256, 3, )
     self.conv1 = nn.Conv2d(1, 32, 4, stride=2)
-    self.conv2 = nn.Conv2d(32, 64, 4, stride=2)
-    self.conv3 = nn.Conv2d(64, 128, 4, stride=2)
-    self.conv4 = nn.Conv2d(128, 256, 4, stride=2)
+    self.conv2 = nn.Conv2d(32, 64, 3, stride=2)
+    self.conv3 = nn.Conv2d(64, 128, 3, stride=2)
+    self.conv4 = nn.Conv2d(128, 256, 3, )
+    # self.conv1 = nn.Conv2d(1, 32, 4, stride=2)
+    # self.conv2 = nn.Conv2d(32, 64, 4, stride=2)
+    # self.conv3 = nn.Conv2d(64, 128, 4, stride=2)
+    # self.conv4 = nn.Conv2d(128, 256, 4, stride=2)
     self.fc = nn.Identity() if embedding_size == 1024 else nn.Linear(1024, embedding_size)
 
   @jit.script_method
@@ -227,8 +227,6 @@ class ActorModel(nn.Module):
     self.fc2 = nn.Linear(hidden_size, hidden_size)
     self.fc3 = nn.Linear(hidden_size, hidden_size)
     self.fc4 = nn.Linear(hidden_size, hidden_size)
-
-    # self.fc5 = nn.Linear(hidden_size, 2 * (action_size-1)) # TODO: only predict the direction, remove this latter
     self.fc5 = nn.Linear(hidden_size, 2 * (action_size))
     self.min_std = min_std
     self.init_std = init_std
@@ -327,10 +325,9 @@ class ActorModel(nn.Module):
     else:
       action = dist.rsample()
 
-    logp_pi = dist.log_prob(action)
     # not use logprob now
     if with_logprob:
-      if self.fix_speed:  # if fix speed, the entropy of speed is nan # TODO: problem here
+      if self.fix_speed:
         logp_pi = dist.log_prob(action)[:, 0]  # only consider the entropy of the
       else:
         logp_pi = dist.log_prob(action).sum(dim=1)

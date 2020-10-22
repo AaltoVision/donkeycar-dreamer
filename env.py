@@ -31,7 +31,7 @@ def _images_to_observation(images, bit_depth):
   # cv2.imshow("test", images_gray)
   # cv2.waitKey(0)
   # cv2.destroyAllWindows()
-  obs = cv2.resize(images_gray, (60, 60), interpolation=cv2.INTER_LINEAR)
+  obs = cv2.resize(images_gray, (40, 40), interpolation=cv2.INTER_LINEAR)
   obs = torch.tensor(obs, dtype=torch.float32).div_(255.).sub_(0.5).unsqueeze(dim=0)  # shape [1, 40, 40], range:[0-1]
   return obs.unsqueeze(dim=0)
 
