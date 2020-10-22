@@ -166,23 +166,11 @@ class Dreamer(Agent):
       # print('\nNumber of parameters: \t pi: %d, \t q1: %d, \t q2: %d\n' % var_counts)
 
   def process_im(self, image, image_size=None, rgb=None):
-    # Resize, put channel first, convert it to a tensor, centre it to [-0.5, 0.5] and add batch dimenstion.
-
-    def preprocess_observation_(observation, bit_depth):
-      # Preprocesses an observation inplace (from float32 Tensor [0, 255] to [-0.5, 0.5])
-      observation.div_(2 ** (8 - bit_depth)).floor_().div_(2 ** bit_depth).sub_(
-        0.5)  # Quantise to given bit depth and centre
-      observation.add_(torch.rand_like(observation).div_(
-        2 ** bit_depth))  # Dequantise (to approx. match likelihood of PDF of continuous images vs. PMF of discrete images)
-
-    image = image[40:, :, :]  # clip the above 40 rows
-    image = torch.tensor(cv2.resize(image, (64, 64), interpolation=cv2.INTER_LINEAR).transpose(2, 0, 1),
-                          dtype=torch.float32)  # Resize and put channel first
-
-    preprocess_observation_(image, self.args.bit_depth)
-    return image.unsqueeze(dim=0)
-
-  def append_buffer(self, new_traj):
+    mages = images[40:, :, :]
+    images = cv2.resize(images, (40, 40))
+    images = np.dot(images, [0.299, 0.587, 0.114])
+    obs = torch.tensor(images, dtype=torch.float32).div_(255.).sub_(0.5).unsqueeze(dim=0)  # shape [1, 40, 40], range:[-0.5,0.5]
+    return obs.unsqueeze(dim=0)  # add batch dimension def append_buffer(self, new_traj):
     # append new collected trajectory, not implement the data augmentation
     # shape of new_traj: [(o, a, r, d) * steps]
     for state in new_traj:
@@ -432,7 +420,6 @@ class Dreamer(Agent):
         action[:, 1] = self.args.throttle_base
       else:
         action[:, 1].clamp_(min=self.args.throttle_min, max=self.args.throttle_max)
-    print("action", action)
     # return action.cup().numpy()
     return action  # this is a Tonsor.cuda
 
