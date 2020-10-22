@@ -19,12 +19,18 @@ def postprocess_observation(observation, bit_depth):
   return np.clip(np.floor((observation + 0.5) * 2 ** bit_depth) * 2 ** (8 - bit_depth), 0, 2 ** 8 - 1).astype(np.uint8)
 
 
+# def _images_to_observation(images, bit_depth):
+#   images = images[40:, :, :]
+#   images = torch.tensor(cv2.resize(images, (64, 64), interpolation=cv2.INTER_LINEAR).transpose(2, 0, 1), dtype=torch.float32)  # Resize and put channel first
+#   preprocess_observation_(images, bit_depth)  # Quantise, centre and dequantise inplace
+#   return images.unsqueeze(dim=0)  # Add batch dimension
+
 def _images_to_observation(images, bit_depth):
   images = images[40:, :, :]
-  images = torch.tensor(cv2.resize(images, (64, 64), interpolation=cv2.INTER_LINEAR).transpose(2, 0, 1), dtype=torch.float32)  # Resize and put channel first
-  preprocess_observation_(images, bit_depth)  # Quantise, centre and dequantise inplace
-  return images.unsqueeze(dim=0)  # Add batch dimension
-
+  images = cv2.resize(images, (40, 40))
+  images = np.dot(images, [0.299, 0.587, 0.114])
+  obs = torch.tensor(images, dtype=torch.float32).div_(255.).sub_(0.5).unsqueeze(dim=0)  # shape [1, 40, 40], range:[-0.5,0.5]
+  return obs.unsqueeze(dim=0)  # add batch dimension 
 
 class ControlSuiteEnv():
   def __init__(self, env, symbolic, seed, max_episode_length, action_repeat, bit_depth):
