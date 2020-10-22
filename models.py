@@ -104,14 +104,10 @@ class VisualObservationModel(jit.ScriptModule):
     self.act_fn = getattr(F, activation_function)
     self.embedding_size = embedding_size
     self.fc1 = nn.Linear(belief_size + state_size, embedding_size)
-    # self.conv1 = nn.ConvTranspose2d(embedding_size, 128, 5, stride=2)
-    # self.conv2 = nn.ConvTranspose2d(128, 64, 5, stride=2)
-    # self.conv3 = nn.ConvTranspose2d(64, 32, 6, stride=2)
-    # self.conv4 = nn.ConvTranspose2d(32, 3, 6, stride=2)
-    self.conv1 = nn.ConvTranspose2d(embedding_size, 64, 3, stride=2)
-    self.conv2 = nn.ConvTranspose2d(64, 32, 4, stride=2)
-    self.conv3 = nn.ConvTranspose2d(32, 16, 4, stride=2)
-    self.conv4 = nn.ConvTranspose2d(16, 1, 6, stride=2)
+    self.conv1 = nn.ConvTranspose2d(embedding_size, 128, 3, stride=2)
+    self.conv2 = nn.ConvTranspose2d(128, 64, 4, stride=2)
+    self.conv3 = nn.ConvTranspose2d(64, 32, 4, stride=2)
+    self.conv4 = nn.ConvTranspose2d(32, 3, 6, stride=2)
 
   @jit.script_method
   def forward(self, belief, state):
@@ -190,15 +186,11 @@ class VisualEncoder(jit.ScriptModule):
     super().__init__()
     self.act_fn = getattr(F, activation_function)
     self.embedding_size = embedding_size
-    self.conv1 = nn.Conv2d(1, 16, 4, stride=2)
-    self.conv2 = nn.Conv2d(16, 32, 3, stride=2)
-    self.conv3 = nn.Conv2d(32, 64, 3, stride=2)
-    self.conv4 = nn.Conv2d(64, 128, 3)
-    # self.conv1 = nn.Conv2d(3, 32, 4, stride=2)
-    # self.conv2 = nn.Conv2d(32, 64, 4, stride=2)
-    # self.conv3 = nn.Conv2d(64, 128, 4, stride=2)
-    # self.conv4 = nn.Conv2d(128, 256, 4, stride=2)
-    self.fc = nn.Identity() if embedding_size == 512 else nn.Linear(512, embedding_size)
+    self.conv1 = nn.Conv2d(3, 32, 4, stride=2)
+    self.conv2 = nn.Conv2d(32, 64, 3, stride=2)
+    self.conv3 = nn.Conv2d(64, 128, 3, stride=2)
+    self.conv4 = nn.Conv2d(128, 256, 3)
+    self.fc = nn.Identity() if embedding_size == 1024 else nn.Linear(1024, embedding_size)
 
   @jit.script_method
   def forward(self, observation):
@@ -206,7 +198,7 @@ class VisualEncoder(jit.ScriptModule):
     hidden = self.act_fn(self.conv2(hidden))
     hidden = self.act_fn(self.conv3(hidden))
     hidden = self.act_fn(self.conv4(hidden))
-    hidden = hidden.view(-1, 512)
+    hidden = hidden.view(-1, 1024)
     hidden = self.fc(hidden)  # Identity if embedding size is 1024 else linear projection
     return hidden
 
@@ -225,7 +217,6 @@ class ActorModel(nn.Module):
     self.act_fn = getattr(F, activation_function)
     self.fix_speed = fix_speed
     self.throtlle_base = throttle_base
-    self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     self.fc1 = nn.Linear(belief_size + state_size, hidden_size)
     self.fc2 = nn.Linear(hidden_size, hidden_size)
     self.fc3 = nn.Linear(hidden_size, hidden_size)
@@ -317,8 +308,8 @@ class ActorModel(nn.Module):
 
     else:
       transform = [AffineTransform(0., 2.), SigmoidTransform(), AffineTransform(-1., 2.),  # TanhTransform
-                   AffineTransform(loc=torch.tensor([0.0, self.throtlle_base]).to(self.device),
-                                  scale=torch.tensor([1.0, 0.2]).to(self.device))]  # TODO: this is limited at donkeycar env
+                   AffineTransform(loc=torch.tensor([0.0, self.throtlle_base]).to("cuda"),
+                                  scale=torch.tensor([1.0, 0.2]).to("cuda"))]  # TODO: this is limited at donkeycar env
 
     dist = TransformedDistribution(dist, transform)
     # dist = torch.distributions.independent.Independent(dist, 1)  # Introduces dependence between actions dimension
