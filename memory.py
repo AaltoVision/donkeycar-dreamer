@@ -8,7 +8,7 @@ class ExperienceReplay():
     self.device = device
     self.symbolic_env = symbolic_env
     self.size = size
-    self.observations = np.empty((size, observation_size) if symbolic_env else (size, 3, 40, 40), dtype=np.float32)
+    self.observations = np.empty((size, observation_size) if symbolic_env else (size, 1, 40, 40), dtype=np.float32)
     self.actions = np.empty((size, action_size), dtype=np.float32)
     self.rewards = np.empty((size, ), dtype=np.float32) 
     # self.nonterminals = np.empty((size, 1), dtype=np.float32)

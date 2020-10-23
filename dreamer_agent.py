@@ -1,25 +1,47 @@
 import sys
 import time
 import argparse
+import copy
+import os
 
 import numpy as np
+import torch
 
 from donkeycar.parts.network import MQTTValuePub, MQTTValueSub
 
 sys.path.insert(1, "/u/95/zhaoy13/unix/ICRA/donkeycar-dreamer")
+sys.path.insert(1, "/home/ari/Documents/donkeycar-dreamer")
+sys.path.insert(1, "/u/70/viitala1/unix/Documents/Dippa/donkeycar-dreamer")
+sys.path.insert(1, "/home/pi/Documents/donkeycar-dreamer")
+
 from agent import Dreamer
 import torch
-import wandb
 
-# import cv2
+# import wandb
 
 parser = argparse.ArgumentParser()
 
-parser.add_argument("--car_name", help="Name of the car on MQTT-server", default="dreamer")
+parser.add_argument("--car_name", help="Name of the car on MQTT-server", default="ari_dreamer")
 parser.add_argument("--episode_steps", help="Number of steps per episode", default=1000, type=int)
 parser.add_argument("--episodes", help="Number of steps episodes per run", default=100, type=int)
+parser.add_argument("--encoder_update", help="Type of encoder to be used", default="aesac")
+parser.add_argument("--total_steps", help="Max steps for a run", default=50000, type=int)
+parser.add_argument("--runs", help="How many runs to do", default=10, type=int)
+parser.add_argument("--load_model", help="Load pretrained model", default="")
+parser.add_argument("--save_model", help="File name to save model", default="")
 
 args = parser.parse_args()
+
+if args.save_model and not os.path.isdir("./models"):
+	os.mkdir("./models")
+
+MODEL_PATH = f"./models/{args.save_model}.pth"
+LOAD_MODEL = args.load_model
+SAVE_MODEL = args.save_model
+
+# DONKEY_NAME = args.car_name
+TRAINING_TIMEOUT = 300
+BLOCK_SIZE = 200
 
 
 class AttrDict(dict):
@@ -30,7 +52,7 @@ class AttrDict(dict):
 def define_config():
 	args = AttrDict()
 	# parameter for dreamer
-	args.car_name = "dreamer"
+	args.car_name = "ari_dreamer"
 	args.episodes_steps = 1000
 	args.episodes = 100
 
@@ -38,7 +60,7 @@ def define_config():
 	args.state_size = 30
 	args.hidden_size = 300
 	args.embedding_size = 1024
-	args.observation_size = (3, 40, 40)  # TODO: change this latter
+	args.observation_size = (1, 40, 40)  # TODO: change this latter
 	args.action_size = 2  # TODO: change this latter
 	args.device = "cuda" if torch.cuda.is_available() else "cpu"
 	args.testing_device = "cpu"
@@ -55,7 +77,6 @@ def define_config():
 	args.experience_size = 1000000
 	args.bit_depth = 5
 	args.discount = 0.99
-	args.temp = 0.2  # entropy temperature
 	args.disclam = 0.95
 	args.planning_horizon = 15
 	args.batch_size = 50
@@ -65,9 +86,9 @@ def define_config():
 	args.expl_amount = 0.3  # action noise
 
 	# for action constrains
-	args.throttle_base = 0.3  # fixed throttle base
-	args.throttle_min = 0.1
-	args.throttle_max = 0.5
+	args.throttle_base = 0.6  # fixed throttle base
+	args.throttle_min = 0.3
+	args.throttle_max = 0.9
 	args.angle_min = -1
 	args.angle_max = 1
 	# I didn't limit the max steering_diff yet
@@ -85,74 +106,21 @@ def define_config():
 
 	# set up for experiments
 	args.pcont = False  # whether to use a learned pcont
-	args.with_logprob = True  # whether to use the soft actor-critic
+	args.with_logprob = False  # whether to use the soft actor-critic
 	args.fix_speed = True  # whether to use fixed speed, fixed speed is 0.3
 
-	args.temp = 0.03
+	args.temp = 0.03  # entropy temperature
 	return args
 
 
-#
-# DONKEY_NAME = args.car_name
-#
-#
-# MAX_STEERING_DIFF = 0.25
-# STEP_LENGTH = 0.1
-#
-# # Add prefill episodes
-# PREFILL_EPISODES = 3
-# RANDOM_EPISODES = 5
-# GRADIENT_STEPS = 100
-#
-# SKIP_INITIAL_STEPS = 20
-# BLOCK_SIZE = 200
-# MAX_EPISODE_STEPS = args.episode_steps + SKIP_INITIAL_STEPS
-#
-# COMMAND_HISTORY_LENGTH = 5
-# FRAME_STACK = 1
-# VAE_OUTPUT = 20
-# LR = 0.0001
-#
-# IMAGE_SIZE = 40  # I didn't pass this argument, instead, I use 64 here, shown in args.
-# RGB = False  # I use RGB
-#
-# PARAMS = {
-#
-#   "sac": {
-#     "linear_output": VAE_OUTPUT + COMMAND_HISTORY_LENGTH * 3,
-#     "lr": LR,
-#     "target_entropy": -2,
-#     "batch_size": 128,
-#     "hidden_size": 64,
-#     "encoder_update_frequency": 0,
-#     "critic_loss_encoder_update": True,
-#     "pretrained_ae": "",
-#     "im_size": IMAGE_SIZE,
-#     "n_images": 20000,
-#     "epochs": 1000
-#   },
-#   "ae": {
-#     "framestack": FRAME_STACK,
-#     "output": VAE_OUTPUT,
-#     "linear_input": 100,
-#     "image_size": IMAGE_SIZE,
-#     "lr": LR / 10,
-#     "image_channels": 3 if RGB else 1,
-#     "encoder_type": "vae",
-#     "batch_size": 64,
-#     "l2_regularization": False
-#   }
-# }
-
-
 class RL_Agent():
-	def __init__(self, alg_type, sim, car_name="dreamer"):
+	def __init__(self, alg_type, sim, car_name=args.car_name):
 		self.args = define_config()
 		self.agent = Dreamer(self.args)
 		self.sim = sim
 
 		self.image = np.zeros((120, 160, 3))
-		self.observation = torch.zeros((1, 3, 64, 64))  # init observation, with batch dim
+		self.observation = torch.zeros((1, 1, 40, 40))  # init observation, with batch dim
 		self.belief = torch.zeros(1, self.args.belief_size, device=self.args.device)
 		self.posterior_state = torch.zeros(1, self.args.state_size, device=self.args.device)
 		self.action = torch.zeros(1, self.args.action_size, device=self.args.device)
@@ -206,14 +174,22 @@ class RL_Agent():
 	def train(self):
 		# print(f"Training for {int(time.time() - self.training_start)} seconds")
 
+		if (time.time() - self.training_start) > TRAINING_TIMEOUT:
+			"""Temporary fix for when sometimes the replay buffer fails to send"""
+			self.training_start = time.time()
+			self.buffers_sent = 0
+			self.replay_buffer_pub.run((0, False))
+			return False
+
 		if len(self.replay_buffer) > 0:
+
 			buffers_received = self.replay_buffer_received_sub.run()
 
 			if self.buffers_sent == buffers_received:
 				self.buffers_sent += 1
-				self.replay_buffer_pub.run((self.buffers_sent, self.replay_buffer[:self.args.block_size]))
-				print(f"Sent {len(self.replay_buffer[:self.args.block_size])} observations")
-				self.replay_buffer = self.replay_buffer[self.args.block_size:]
+				self.replay_buffer_pub.run((self.buffers_sent, self.replay_buffer[:BLOCK_SIZE]))
+				print(f"Sent {len(self.replay_buffer[:BLOCK_SIZE])} observations")
+				self.replay_buffer = self.replay_buffer[BLOCK_SIZE:]
 
 			return True
 
@@ -221,14 +197,6 @@ class RL_Agent():
 			self.buffers_sent = 0
 			self.replay_buffer_received_pub.run(0)
 			self.replay_buffer_pub.run((0, False))
-
-		if (time.time() - self.training_start) > 360:
-			"""Temporary fix for when sometimes the replay buffer fails to send"""
-			self.training_start = time.time()
-			self.buffer_sent = False
-			self.replay_buffer_pub.run((0, False))
-
-			return False
 
 		new_params = self.param_sub.run()
 
@@ -331,7 +299,7 @@ class RL_Agent():
 
 		if self.episode <= self.args.random_episodes:
 			self.steering = np.random.normal(0, 1)
-			self.target_speed = 0.3
+			self.target_speed = self.args.throttle_base
 			self.action = torch.tensor([[self.steering, self.target_speed]], device=self.args.device)
 		else:
 
@@ -416,12 +384,18 @@ class RL_Agent():
 
 
 if __name__ == "__main__":
-	wandb.init(project="dreamer_local")
+	# wandb.init(project="dreamer_local")
 	print("Starting as training server")
-	args = define_config()
-	wandb.config.update(args)
+	load_model = args.load_model
 
-	agent = RL_Agent("dreamer", True, args.car_name)
+	args = define_config()
+	# wandb.config.update(args)
+
+	agent = RL_Agent("ari_dreamer", True, args.car_name)  # TODO: remember to change to use sim or real car
+
+	if LOAD_MODEL:
+		agent.agent = torch.load(LOAD_MODEL)
+
 	params_sent = False
 	buffer_received = False
 	trained = False
@@ -438,7 +412,7 @@ if __name__ == "__main__":
 		if (new_buffer[0] - 1) == prev_buffer and not trained:
 			print("New buffer")
 			print(f"{len(new_buffer[1])} new buffer observations")
-			wandb.log({"step": len(new_buffer[1])})
+			# wandb.log({"step": len(new_buffer[1])})
 			agent.agent.append_buffer(new_buffer[1])
 			prev_buffer += 1
 			agent.replay_buffer_received_pub.run(prev_buffer)
@@ -447,9 +421,16 @@ if __name__ == "__main__":
 		if new_buffer[
 			1] == False and prev_buffer > 0 and not trained and epi >= args.prefill_episodes:  # add flag to prefill data
 			print("Training")
+			if not LOAD_MODEL:
+				print("Training")
+				agent.agent.update_parameters(args.gradient_steps)
 
-			agent.agent.update_parameters(args.gradient_steps)
 			params = agent.agent.export_parameters()
+
+			if SAVE_MODEL:
+				print("Saving model")
+				torch.save(params, MODEL_PATH)
+
 			trained = True
 			print("Sending parameters")
 			agent.param_pub.run(params)
@@ -467,6 +448,7 @@ if __name__ == "__main__":
 			prev_buffer = 0
 			print("Waiting for observations.")
 
-		# training_episodes += 1
+	# training_episodes += 1
 
-		time.sleep(0.1)
+	time.sleep(0.1)
+
