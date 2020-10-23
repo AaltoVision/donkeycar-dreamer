@@ -166,11 +166,13 @@ class Dreamer(Agent):
       # print('\nNumber of parameters: \t pi: %d, \t q1: %d, \t q2: %d\n' % var_counts)
 
   def process_im(self, image, image_size=None, rgb=None):
-    mages = images[40:, :, :]
-    images = cv2.resize(images, (40, 40))
+    mages = image[40:, :, :]
+    images = cv2.resize(image, (40, 40))
     images = np.dot(images, [0.299, 0.587, 0.114])
     obs = torch.tensor(images, dtype=torch.float32).div_(255.).sub_(0.5).unsqueeze(dim=0)  # shape [1, 40, 40], range:[-0.5,0.5]
-    return obs.unsqueeze(dim=0)  # add batch dimension def append_buffer(self, new_traj):
+    return obs.unsqueeze(dim=0)  # add batch dimension
+
+  def append_buffer(self, new_traj):
     # append new collected trajectory, not implement the data augmentation
     # shape of new_traj: [(o, a, r, d) * steps]
     for state in new_traj:
@@ -410,6 +412,7 @@ class Dreamer(Agent):
     # get action with the inputs get from fn: infer_state; return a numpy with shape [batch, act_size]
     belief, posterior_state = state
     action, _ = self.actor_model(belief, posterior_state, deterministic=deterministic, with_logprob=False)
+    
     if not deterministic and not self.args.with_logprob:
       action = Normal(action, self.args.expl_amount).rsample()
 
