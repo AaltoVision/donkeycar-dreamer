@@ -27,7 +27,7 @@ parser.add_argument('--cnn-act', type=str, default='relu', choices=dir(F),
 										help='Model activation function for a convolution layer')
 parser.add_argument('--dense-act', type=str, default='elu', choices=dir(F),
 										help='Model activation function a dense layer')
-parser.add_argument('--embedding-size', type=int, default=512, metavar='E',
+parser.add_argument('--embedding-size', type=int, default=1024, metavar='E',
 										help='Observation embedding size')  # Note that the default encoder for visual observations outputs a 1024D vector; for other embedding sizes an additional fully-connected layer is used
 parser.add_argument('--hidden-size', type=int, default=300, metavar='H',
 										help='Hidden size')  # paper:300; tf_implementation:400; aligned wit paper.
@@ -84,10 +84,10 @@ parser.add_argument('--host', type=str, default='127.0.0.1', help='host ip')
 # por sac
 parser.add_argument('--with_logprob', action='store_true')
 parser.add_argument('--use_automatic_entropy_tuning', action='store_true', help="Use the entropy regularization")
-parser.add_argument('--temp', type=float, default=0.003)  # temp for entropy
+parser.add_argument('--temp', type=float, default=0.03)  # temp for entropy
 
 parser.add_argument('--action_size', default=2)
-parser.add_argument('--observation_size', default=(1, 40, 40))
+parser.add_argument('--observation_size', default=(3, 40, 40))
 
 # for action constrains
 parser.add_argument('--fix_speed', action='store_true')
