@@ -8,7 +8,7 @@ from tqdm import tqdm
 from env import CONTROL_SUITE_ENVS, Env, GYM_ENVS, DONKEY_CAR_ENVS, EnvBatcher
 from agent import Dreamer, bottle
 from utils import lineplot, write_video
-# from tensorboardX import SummaryWriter
+from tensorboardX import SummaryWriter
 import wandb
 
 # Hyperparameters
@@ -77,7 +77,7 @@ parser.add_argument('--pcont_scale', type=int, default=10, help='The coefficient
 parser.add_argument('--reward_scale', type=int, default=10, help='the coefficient term of reward loss')
 # For donkey car
 parser.add_argument('--sim_path', type=str,
-										default='/u/95/zhaoy13/unix/summer/donkeycar_remote/DonkeySimLinux/donkey_sim.x86_64',
+										default='/u/95/zhaoy13/unix/summer/ICRA/donkey/DonkeySimLinux/donkey_sim.x86_64',
 										help='path to the unity simulator, a .x86_64 file.')
 parser.add_argument('--port', type=int, default=9091, help='port to use for tcp')
 parser.add_argument('--host', type=str, default='127.0.0.1', help='host ip')
@@ -87,11 +87,11 @@ parser.add_argument('--use_automatic_entropy_tuning', action='store_true', help=
 parser.add_argument('--temp', type=float, default=0.03)  # temp for entropy
 
 parser.add_argument('--action_size', default=2)
-parser.add_argument('--observation_size', default=(1, 40, 40))
+parser.add_argument('--observation_size', default=(3, 40, 40))
 
 # for action constrains
 parser.add_argument('--fix_speed', action='store_true')
-parser.add_argument('--throttle_base', default=0.6)
+parser.add_argument('--throttle_base', default=0.3)
 parser.add_argument('--throttle_min', default=0.1)
 parser.add_argument('--throttle_max', default=0.5)
 parser.add_argument('--angle_min', default=-1)
@@ -120,7 +120,7 @@ metrics = {'steps': [], 'episodes': [], 'train_rewards': [], 'test_episodes': []
 					 'observation_loss': [], 'reward_loss': [], 'kl_loss': [], 'actor_loss': [], 'value_loss': []}
 
 summary_name = results_dir + "/{}_{}_log"
-# writer = SummaryWriter(summary_name.format(args.env, args.seed))
+writer = SummaryWriter(summary_name.format(args.env, args.seed))
 
 # Initialise training environment and experience replay memory
 env = Env(args.env, args.symbolic, args.seed, args.max_episode_length, args.action_repeat, args.bit_depth,
@@ -139,7 +139,7 @@ elif not args.test:
 		observation, done, t = env.reset(), False, 0
 		while not done:
 			action = env.sample_random_action()
-			action[1] = args.throttle_base  # fix the action
+			action[1] = 0.3  # fix the action
 			next_observation, reward, done = env.step(action)
 			# agent.D.append(observation, action, reward, done)
 			agent.D.append(next_observation, action, reward, done)  # TODO:1
@@ -279,7 +279,7 @@ for episode in tqdm(range(metrics['episodes'][-1] + 1, args.episodes + 1), total
 			agent.D.append(next_observation, action.cpu(), reward, done)  # TODO:2
 			total_reward += reward
 			observation = next_observation
-			# print(bottle(agent.value_model, (belief.unsqueeze(dim=0), posterior_state.unsqueeze(dim=0))).item())
+			print(bottle(agent.value_model, (belief.unsqueeze(dim=0), posterior_state.unsqueeze(dim=0))).item())
 			if args.render:
 				env.render()
 			if done:
@@ -367,13 +367,13 @@ for episode in tqdm(range(metrics['episodes'][-1] + 1, args.episodes + 1), total
 	# test_envs.close()
 	# env.close()
 
-	# writer.add_scalar("train_reward", metrics['train_rewards'][-1], metrics['steps'][-1])
-	# writer.add_scalar("train/episode_reward", metrics['train_rewards'][-1], metrics['steps'][-1] * args.action_repeat)
-	# writer.add_scalar("observation_loss", metrics['observation_loss'][0][-1], metrics['steps'][-1])
-	# writer.add_scalar("reward_loss", metrics['reward_loss'][0][-1], metrics['steps'][-1])
-	# writer.add_scalar("kl_loss", metrics['kl_loss'][0][-1], metrics['steps'][-1])
-	# writer.add_scalar("actor_loss", metrics['actor_loss'][0][-1], metrics['steps'][-1])
-	# writer.add_scalar("value_loss", metrics['value_loss'][0][-1], metrics['steps'][-1])
+	writer.add_scalar("train_reward", metrics['train_rewards'][-1], metrics['steps'][-1])
+	writer.add_scalar("train/episode_reward", metrics['train_rewards'][-1], metrics['steps'][-1] * args.action_repeat)
+	writer.add_scalar("observation_loss", metrics['observation_loss'][0][-1], metrics['steps'][-1])
+	writer.add_scalar("reward_loss", metrics['reward_loss'][0][-1], metrics['steps'][-1])
+	writer.add_scalar("kl_loss", metrics['kl_loss'][0][-1], metrics['steps'][-1])
+	writer.add_scalar("actor_loss", metrics['actor_loss'][0][-1], metrics['steps'][-1])
+	writer.add_scalar("value_loss", metrics['value_loss'][0][-1], metrics['steps'][-1])
 	print("episodes: {}, total_steps: {}, train_reward: {} ".format(metrics['episodes'][-1], metrics['steps'][-1],
 																																	metrics['train_rewards'][-1]))
 	wandb.log({"episode": episode, "cumulative_reward": total_reward})

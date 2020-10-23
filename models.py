@@ -107,7 +107,7 @@ class VisualObservationModel(jit.ScriptModule):
     self.conv1 = nn.ConvTranspose2d(embedding_size, 128, 3, stride=2)
     self.conv2 = nn.ConvTranspose2d(128, 64, 4, stride=2)
     self.conv3 = nn.ConvTranspose2d(64, 32, 4, stride=2)
-    self.conv4 = nn.ConvTranspose2d(32, 1, 6, stride=2)
+    self.conv4 = nn.ConvTranspose2d(32, 3, 6, stride=2)
 
   @jit.script_method
   def forward(self, belief, state):
@@ -125,53 +125,6 @@ def ObservationModel(symbolic, observation_size, belief_size, state_size, embedd
     return SymbolicObservationModel(observation_size, belief_size, state_size, embedding_size, activation_function)
   else:
     return VisualObservationModel(belief_size, state_size, embedding_size, activation_function)
-
-
-class SymbolicEncoder(jit.ScriptModule):
-  def __init__(self, observation_size, embedding_size, activation_function='relu'):
-    super().__init__()
-    self.act_fn = getattr(F, activation_function)
-    self.fc1 = nn.Linear(observation_size, embedding_size)
-    self.fc2 = nn.Linear(embedding_size, embedding_size)
-    self.fc3 = nn.Linear(embedding_size, embedding_size)
-
-  @jit.script_method
-  def forward(self, observation):
-    hidden = self.act_fn(self.fc1(observation))
-    hidden = self.act_fn(self.fc2(hidden))
-    hidden = self.fc3(hidden)
-    return hidden
-
-
-class VisualEncoder(jit.ScriptModule):
-  __constants__ = ['embedding_size']
-  
-  def __init__(self, embedding_size, activation_function='relu'):
-    super().__init__()
-    self.act_fn = getattr(F, activation_function)
-    self.embedding_size = embedding_size
-    self.conv1 = nn.Conv2d(1, 32, 4, stride=2)
-    self.conv2 = nn.Conv2d(32, 64, 3, stride=2)
-    self.conv3 = nn.Conv2d(64, 128, 3, stride=2)
-    self.conv4 = nn.Conv2d(128, 256, 3)
-    self.fc = nn.Identity() if embedding_size == 1024 else nn.Linear(1024, embedding_size)
-
-  @jit.script_method
-  def forward(self, observation):
-    hidden = self.act_fn(self.conv1(observation))
-    hidden = self.act_fn(self.conv2(hidden))
-    hidden = self.act_fn(self.conv3(hidden))
-    hidden = self.act_fn(self.conv4(hidden))
-    hidden = hidden.view(-1, 1024)
-    hidden = self.fc(hidden)  # Identity if embedding size is 1024 else linear projection
-    return hidden
-
-
-def Encoder(symbolic, observation_size, embedding_size, activation_function='relu'):
-  if symbolic:
-    return SymbolicEncoder(observation_size, embedding_size, activation_function)
-  else:
-    return VisualEncoder(embedding_size, activation_function)
 
 
 class RewardModel(jit.ScriptModule):
@@ -208,6 +161,53 @@ class ValueModel(nn.Module):
     hidden = self.act_fn(self.fc3(hidden))
     reward = self.fc4(hidden).squeeze(dim=1)
     return reward
+
+
+class SymbolicEncoder(jit.ScriptModule):
+  def __init__(self, observation_size, embedding_size, activation_function='relu'):
+    super().__init__()
+    self.act_fn = getattr(F, activation_function)
+    self.fc1 = nn.Linear(observation_size, embedding_size)
+    self.fc2 = nn.Linear(embedding_size, embedding_size)
+    self.fc3 = nn.Linear(embedding_size, embedding_size)
+
+  @jit.script_method
+  def forward(self, observation):
+    hidden = self.act_fn(self.fc1(observation))
+    hidden = self.act_fn(self.fc2(hidden))
+    hidden = self.fc3(hidden)
+    return hidden
+
+
+class VisualEncoder(jit.ScriptModule):
+  __constants__ = ['embedding_size']
+  
+  def __init__(self, embedding_size, activation_function='relu'):
+    super().__init__()
+    self.act_fn = getattr(F, activation_function)
+    self.embedding_size = embedding_size
+    self.conv1 = nn.Conv2d(3, 32, 4, stride=2)
+    self.conv2 = nn.Conv2d(32, 64, 3, stride=2)
+    self.conv3 = nn.Conv2d(64, 128, 3, stride=2)
+    self.conv4 = nn.Conv2d(128, 256, 3)
+    self.fc = nn.Identity() if embedding_size == 1024 else nn.Linear(1024, embedding_size)
+
+  @jit.script_method
+  def forward(self, observation):
+    hidden = self.act_fn(self.conv1(observation))
+    hidden = self.act_fn(self.conv2(hidden))
+    hidden = self.act_fn(self.conv3(hidden))
+    hidden = self.act_fn(self.conv4(hidden))
+    hidden = hidden.view(-1, 1024)
+    hidden = self.fc(hidden)  # Identity if embedding size is 1024 else linear projection
+    return hidden
+
+
+def Encoder(symbolic, observation_size, embedding_size, activation_function='relu'):
+  if symbolic:
+    return SymbolicEncoder(observation_size, embedding_size, activation_function)
+  else:
+    return VisualEncoder(embedding_size, activation_function)
 
 
 class ActorModel(nn.Module):

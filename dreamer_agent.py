@@ -50,81 +50,82 @@ class AttrDict(dict):
 
 
 def define_config():
-	args = AttrDict()
+	config = AttrDict()
 	# parameter for dreamer
-	args.car_name = "ari_dreamer"
-	args.episodes_steps = 1000
-	args.episodes = 100
+	config.car_name = "ari_dreamer"
+	config.episodes_steps = 1000
+	config.episodes = 100
 
-	args.belief_size = 200
-	args.state_size = 30
-	args.hidden_size = 300
-	args.embedding_size = 1024
-	args.observation_size = (1, 40, 40)  # TODO: change this latter
-	args.action_size = 2  # TODO: change this latter
-	args.device = "cuda" if torch.cuda.is_available() else "cpu"
-	args.testing_device = "cpu"
-	args.symbolic = False
-	args.dense_act = 'elu'
-	args.cnn_act = 'relu'
+	config.belief_size = 200
+	config.state_size = 30
+	config.hidden_size = 300
+	config.embedding_size = 1024
+	config.observation_size = (1, 40, 40)  # TODO: change this latter
+	config.action_size = 2  # TODO: change this latter
+	config.device = "cuda" if torch.cuda.is_available() else "cpu"
+	config.testing_device = "cpu"
+	config.symbolic = False
+	config.dense_act = 'elu'
+	config.cnn_act = 'relu'
 
-	args.pcont_scale = 5
-	args.reward_scale = 5
-	args.world_lr = 6e-4
-	args.actor_lr = 8e-5
-	args.value_lr = 8e-5
-	args.free_nats = 3
-	args.experience_size = 1000000
-	args.bit_depth = 5
-	args.discount = 0.99
-	args.disclam = 0.95
-	args.planning_horizon = 15
-	args.batch_size = 50
-	args.chunk_size = 50
-	args.grad_clip_norm = 100.0
+	config.pcont_scale = 5
+	config.reward_scale = 5
+	config.world_lr = 6e-4
+	config.actor_lr = 8e-5
+	config.value_lr = 8e-5
+	config.free_nats = 3
+	config.experience_size = 1000000
+	config.bit_depth = 5
+	config.discount = 0.99
+	config.disclam = 0.95
+	config.planning_horizon = 15
+	config.batch_size = 50
+	config.chunk_size = 50
+	config.grad_clip_norm = 100.0
 
-	args.expl_amount = 0.3  # action noise
+	config.expl_amount = 0.3  # action noise
 
 	# for action constrains
-	args.throttle_base = 0.6  # fixed throttle base
-	args.throttle_min = 0.3
-	args.throttle_max = 0.9
-	args.angle_min = -1
-	args.angle_max = 1
+	config.throttle_base = 0.6  # fixed throttle base
+	config.throttle_min = 0.3
+	config.throttle_max = 0.9
+	config.angle_min = -1
+	config.angle_max = 1
 	# I didn't limit the max steering_diff yet
-	args.max_steering_diff = 0.25
-	args.step_length = 0.1
+	config.max_steering_diff = 0.25
+	config.step_length = 0.1
 
 	# add prefill episodes
-	args.prefill_episodes = 5
-	args.random_episodes = 6
-	args.gradient_steps = 100
-	args.skip_initial_steps = 20
-	args.block_size = 200
+	config.prefill_episodes = 5
+	config.random_episodes = 6
+	config.gradient_steps = 100
+	config.skip_initial_steps = 20
+	config.block_size = 200
 
-	args.max_episodes_steps = args.episodes_steps + args.skip_initial_steps
+	config.max_episodes_steps = config.episodes_steps + config.skip_initial_steps
 
 	# set up for experiments
-	args.pcont = False  # whether to use a learned pcont
-	args.with_logprob = False  # whether to use the soft actor-critic
-	args.fix_speed = True  # whether to use fixed speed, fixed speed is 0.3
+	config.pcont = False  # whether to use a learned pcont
+	config.with_logprob = False  # whether to use the soft actor-critic
+	config.fix_speed = True  # whether to use fixed speed, fixed speed is 0.3
 
-	args.temp = 0.03  # entropy temperature
-	return args
+	config.temp = 0.03  # entropy temperature
+	return config
 
 
 class RL_Agent():
 	def __init__(self, alg_type, sim, car_name=args.car_name):
-		self.args = define_config()
-		self.agent = Dreamer(self.args)
+		self.config = define_config()
+		self.agent = Dreamer(self.config)
 		self.sim = sim
 
 		self.image = np.zeros((120, 160, 3))
-		self.observation = torch.zeros((1, 1, 40, 40))  # init observation, with batch dim
-		self.belief = torch.zeros(1, self.args.belief_size, device=self.args.device)
-		self.posterior_state = torch.zeros(1, self.args.state_size, device=self.args.device)
-		self.action = torch.zeros(1, self.args.action_size, device=self.args.device)
-		# self.act_history = torch.zeros(1, self.args.action_size*3, device=self.args.device)
+		# self.observation = torch.zeros((1, 1, 40, 40))  # init observation, with batch dim
+		self.observation = torch.zeros((1, 3, 40, 40))  # init observation, with batch dim
+		self.belief = torch.zeros(1, self.config.belief_size, device=self.config.device)
+		self.posterior_state = torch.zeros(1, self.config.state_size, device=self.config.device)
+		self.action = torch.zeros(1, self.config.action_size, device=self.config.device)
+		# self.act_history = torch.zeros(1, self.config.action_size*3, device=self.config.device)
 
 		self.speed = 0
 
@@ -149,6 +150,7 @@ class RL_Agent():
 
 		self.param_pub = MQTTValuePub(car_name + "param", broker="mqtt.eclipse.org")
 		self.param_sub = MQTTValueSub(car_name + "param", broker="mqtt.eclipse.org")
+		self.t = 0
 
 	def reset(self, image):
 		self.episode += 1
@@ -161,10 +163,10 @@ class RL_Agent():
 
 		# self.command_history = np.zeros(3*COMMAND_HISTORY_LENGTH)
 		# self.state = np.vstack([image for x in range(FRAME_STACK)])
-		self.belief = torch.zeros(1, self.args.belief_size, device=self.args.device)
-		self.posterior_state = torch.zeros(1, self.args.state_size, device=self.args.device)
-		self.action = torch.zeros(1, self.args.action_size, device=self.args.device)
-		# self.act_history = torch.zeros(1, self.args.action_size*3, device=self.args.device)
+		self.belief = torch.zeros(1, self.config.belief_size, device=self.config.device)
+		self.posterior_state = torch.zeros(1, self.config.state_size, device=self.config.device)
+		self.action = torch.zeros(1, self.config.action_size, device=self.config.device)
+		# self.act_history = torch.zeros(1, self.config.action_size*3, device=self.config.device)
 
 		self.buffer_sent = False
 		self.buffer_received = False
@@ -222,8 +224,9 @@ class RL_Agent():
 		self.dead = self.is_dead(self.image) if not self.sim else self.is_dead_sim(self.image)
 
 		if self.step > 0 and not self.training:
+			self.t += 1
 			"""Save observation to replay buffer"""
-			reward = 1 + (self.speed - self.args.throttle_min) / (self.args.throttle_max - self.args.throttle_min)
+			reward = 1 + (self.speed - self.config.throttle_min) / (self.config.throttle_max - self.config.throttle_min)
 			# reward = min(reward, 2) / 2
 			# reward = self.speed + 1
 			done = self.dead
@@ -231,7 +234,7 @@ class RL_Agent():
 			# reward = -self.speed - 10 if self.dead else reward
 			# cv2.imwrite("./obs/img_{t}.png".format(t=self.step), self.image)
 			next_observation = self.agent.process_im(self.image)
-
+			# save_image(next_observation+0.5, '{i}.png'.format(i=self.t))
 			# self.replay_buffer.append((self.observation,
 			#                             self.action.cpu(),
 			#                            reward,
@@ -267,7 +270,7 @@ class RL_Agent():
 
 		# print(f"Episode: {self.episode}, Step: {self.step}, Reward: {reward:.2f}, Episode reward: {self.episode_reward:.2f}, Step time: {(self.step_start - step_end):.2f}, Speed: {self.speed:.2f}")
 
-		if self.step > self.args.max_episodes_steps or (self.dead and not self.training):
+		if self.step > self.config.max_episodes_steps or (self.dead and not self.training):
 			self.training_start = time.time()
 
 			self.step = 0
@@ -275,7 +278,7 @@ class RL_Agent():
 			self.target_speed = 0
 
 			self.training = True
-			self.replay_buffer = self.replay_buffer[self.args.skip_initial_steps:]
+			self.replay_buffer = self.replay_buffer[self.config.skip_initial_steps:]
 			return self.steering, self.target_speed, self.training
 
 		if self.training:
@@ -292,19 +295,19 @@ class RL_Agent():
 
 		self.step += 1
 
-		if self.step < self.args.skip_initial_steps:
+		if self.step < self.config.skip_initial_steps:
 			return 0.001, 0, False
 
 		self.step_start = time.time()
 
-		if self.episode <= self.args.random_episodes:
+		if self.episode <= self.config.random_episodes:
 			self.steering = np.random.normal(0, 1)
-			self.target_speed = self.args.throttle_base
-			self.action = torch.tensor([[self.steering, self.target_speed]], device=self.args.device)
+			self.target_speed = self.config.throttle_base
+			self.action = torch.tensor([[self.steering, self.target_speed]], device=self.config.device)
 		else:
 
 			with torch.no_grad():
-				self.belief, self.posterior_state = self.agent.infer_state(self.observation.to(self.args.device),
+				self.belief, self.posterior_state = self.agent.infer_state(self.observation.to(self.config.device),
 																																	 action=self.action,
 																																	 belief=self.belief,
 																																	 state=self.posterior_state)
@@ -372,11 +375,11 @@ class RL_Agent():
 		Scale the agent actions to environment limits
 		"""
 
-		var = (self.args.throttle_max - self.args.throttle_min) / 2
-		mu = (self.args.throttle_max + self.args.throttle_min) / 2
+		var = (self.config.throttle_max - self.config.throttle_min) / 2
+		mu = (self.config.throttle_max + self.config.throttle_min) / 2
 
-		steering_min = max(self.args.steer_limit_left, prev_steering - self.args.max_steering_diff)
-		steering_max = min(self.args.steer_limit_right, prev_steering + self.args.max_steering_diff)
+		steering_min = max(self.config.steer_limit_left, prev_steering - self.config.max_steering_diff)
+		steering_max = min(self.config.steer_limit_right, prev_steering + self.config.max_steering_diff)
 
 		steering = max(steering_min, min(steering_max, action[0]))
 
@@ -384,17 +387,13 @@ class RL_Agent():
 
 
 if __name__ == "__main__":
-	# wandb.init(project="dreamer_local")
 	print("Starting as training server")
 	load_model = args.load_model
-
-	args = define_config()
-	# wandb.config.update(args)
-
+	config = define_config()
 	agent = RL_Agent("ari_dreamer", True, args.car_name)  # TODO: remember to change to use sim or real car
 
-	if LOAD_MODEL:
-		agent.agent = torch.load(LOAD_MODEL)
+	if args.load_model:
+		agent.agent = torch.load(args.load_model)
 
 	params_sent = False
 	buffer_received = False
@@ -402,7 +401,7 @@ if __name__ == "__main__":
 	training_episodes = 0
 	buffers_received = 0
 	prev_buffer = 0
-	epi = 0  # add for recording trainig episodes, since the training_episodes seems not useful.
+	epi = 0  # for recording episode (used for buffer prefilling) # TODO: This is acutally problematic, since the once it receive 200 step, it counts one epi, but since this is only used for prefilling, where the length per episode < 200, so it's fine here
 
 	while training_episodes < args.episodes:
 		new_buffer = agent.replay_buffer_sub.run()
@@ -419,24 +418,38 @@ if __name__ == "__main__":
 			epi += 1
 
 		if new_buffer[
-			1] == False and prev_buffer > 0 and not trained and epi >= args.prefill_episodes:  # add flag to prefill data
+			1] == False and prev_buffer > 0 and not trained and epi >= config.prefill_episodes:  # add flag to prefill data
 			print("Training")
-			if not LOAD_MODEL:
+			if not args.load_model:
 				print("Training")
-				agent.agent.update_parameters(args.gradient_steps)
+				agent.agent.update_parameters(config.gradient_steps)
+
+				if agent.agent.D.steps > args.total_steps:
+
+					# finish handling
+					# ......env, break, save ...
+
+					if args.save_model:
+						print("Saving model")
+						torch.save({'transition_model': agent.agent.transition_model.state_dict(),
+												'observation_model': agent.agent.observation_model.state_dict(),
+												'reward_model': agent.agent.reward_model.state_dict(),
+												'encoder': agent.agent.encoder.state_dict(),
+												'actor_model': agent.agent.actor_model.state_dict(),
+												'value_model': agent.agent.value_model.state_dict(),
+												'value_model2': agent.agent.value_model2.state_dict(),
+												},
+											 MODEL_PATH)
+
+					break  # end the run
 
 			params = agent.agent.export_parameters()
-
-			if SAVE_MODEL:
-				print("Saving model")
-				torch.save(params, MODEL_PATH)
-
 			trained = True
 			print("Sending parameters")
 			agent.param_pub.run(params)
 			time.sleep(1)
 
-		if new_buffer[1] == False and prev_buffer > 0 and not trained and epi < args.prefill_episodes:  # prefilling data
+		if new_buffer[1] == False and prev_buffer > 0 and not trained and epi < config.prefill_episodes:  # prefilling data
 			print("Prefill random data")
 			params = agent.agent.export_parameters()
 			trained = True
@@ -451,4 +464,5 @@ if __name__ == "__main__":
 	# training_episodes += 1
 
 	time.sleep(0.1)
+
 
