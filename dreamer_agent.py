@@ -38,7 +38,7 @@ def define_config():
 	args.state_size = 30
 	args.hidden_size = 300
 	args.embedding_size = 1024
-	args.observation_size = (3, 64, 64)  # TODO: change this latter
+	args.observation_size = (3, 40, 40)  # TODO: change this latter
 	args.action_size = 2  # TODO: change this latter
 	args.device = "cuda" if torch.cuda.is_available() else "cpu"
 	args.testing_device = "cpu"
@@ -47,6 +47,7 @@ def define_config():
 	args.cnn_act = 'relu'
 
 	args.pcont_scale = 5
+	args.reward_scale = 5
 	args.world_lr = 6e-4
 	args.actor_lr = 8e-5
 	args.value_lr = 8e-5
@@ -84,9 +85,10 @@ def define_config():
 
 	# set up for experiments
 	args.pcont = False  # whether to use a learned pcont
-	args.with_logprob = False  # whether to use the soft actor-critic
-	args.fix_speed = False  # whether to use fixed speed, fixed speed is 0.3
+	args.with_logprob = True  # whether to use the soft actor-critic
+	args.fix_speed = True  # whether to use fixed speed, fixed speed is 0.3
 
+	args.temp = 0.03
 	return args
 
 
@@ -253,7 +255,7 @@ class RL_Agent():
 
 		if self.step > 0 and not self.training:
 			"""Save observation to replay buffer"""
-			reward = 1 + 0.5 * (self.speed - self.args.throttle_min) / (self.args.throttle_max - self.args.throttle_min)
+			reward = 1 + (self.speed - self.args.throttle_min) / (self.args.throttle_max - self.args.throttle_min)
 			# reward = min(reward, 2) / 2
 			# reward = self.speed + 1
 			done = self.dead
@@ -292,10 +294,10 @@ class RL_Agent():
 			print(
 				f"Episode: {self.episode}, Step: {self.step}, Reward: {reward:.2f}, Episode reward: {self.episode_reward:.2f}, Step time: {(self.step_start - step_end):.2f}, Speed: {self.speed:.2f}, Steering, {self.steering:.2f}")
 
-			# self.state = next_state
-			# self.command_history = next_command_history
+		# self.state = next_state
+		# self.command_history = next_command_history
 
-			# print(f"Episode: {self.episode}, Step: {self.step}, Reward: {reward:.2f}, Episode reward: {self.episode_reward:.2f}, Step time: {(self.step_start - step_end):.2f}, Speed: {self.speed:.2f}")
+		# print(f"Episode: {self.episode}, Step: {self.step}, Reward: {reward:.2f}, Episode reward: {self.episode_reward:.2f}, Step time: {(self.step_start - step_end):.2f}, Speed: {self.speed:.2f}")
 
 		if self.step > self.args.max_episodes_steps or (self.dead and not self.training):
 			self.training_start = time.time()
@@ -348,24 +350,24 @@ class RL_Agent():
 				action = self.action.cpu().numpy()  # act dim : [batch_size, act_size]
 				# action = self.enforce_limits(action[0], self.steering)  # size [act_size]
 				self.steering, self.target_speed = action[0][0], action[0][1]
-				# self.action[0] = torch.tensor(action).to(self.action)
-				# print("after limit ", self.action)
-				## didn't use enforce_limit yet
-				# self.steering, self.target_speed = self.enforce_limits(action, self.command_history[0]) # TODO: change this
+			# self.action[0] = torch.tensor(action).to(self.action)
+			# print("after limit ", self.action)
+			## didn't use enforce_limit yet
+			# self.steering, self.target_speed = self.enforce_limits(action, self.command_history[0]) # TODO: change this
 
 		return self.steering, self.target_speed, self.training
 
-		# action = self.agent.select_action((self.state, self.command_history))
+	# action = self.agent.select_action((self.state, self.command_history))
 
-		# self.steering, self.target_speed = self.enforce_limits(action, self.command_history[0])
+	# self.steering, self.target_speed = self.enforce_limits(action, self.command_history[0])
 
-		# return self.steering, self.target_speed, self.training
+	# return self.steering, self.target_speed, self.training
 
 	def is_dead(self, img):
 		"""
-    Counts the black pixels from the ground and compares the amount to a threshold value.
-    If there are not enough black pixels the car is assumed to be off the track.
-    """
+		Counts the black pixels from the ground and compares the amount to a threshold value.
+		If there are not enough black pixels the car is assumed to be off the track.
+		"""
 
 		crop_height = 20
 		crop_width = 20
@@ -399,8 +401,8 @@ class RL_Agent():
 
 	def enforce_limits(self, action, prev_steering):
 		"""
-    Scale the agent actions to environment limits
-    """
+		Scale the agent actions to environment limits
+		"""
 
 		var = (self.args.throttle_max - self.args.throttle_min) / 2
 		mu = (self.args.throttle_max + self.args.throttle_min) / 2

@@ -176,7 +176,7 @@ class Dreamer(Agent):
         2 ** bit_depth))  # Dequantise (to approx. match likelihood of PDF of continuous images vs. PMF of discrete images)
 
     image = image[40:, :, :]  # clip the above 40 rows
-    image = torch.tensor(cv2.resize(image, (64, 64), interpolation=cv2.INTER_LINEAR).transpose(2, 0, 1),
+    image = torch.tensor(cv2.resize(image, (40, 40), interpolation=cv2.INTER_LINEAR).transpose(2, 0, 1),
                           dtype=torch.float32)  # Resize and put channel first
 
     preprocess_observation_(image, self.args.bit_depth)
