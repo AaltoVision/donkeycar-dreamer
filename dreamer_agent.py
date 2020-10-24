@@ -25,7 +25,7 @@ parser.add_argument("--car_name", help="Name of the car on MQTT-server", default
 parser.add_argument("--episode_steps", help="Number of steps per episode", default=1000, type=int)
 parser.add_argument("--episodes", help="Number of steps episodes per run", default=100, type=int)
 parser.add_argument("--encoder_update", help="Type of encoder to be used", default="aesac")
-parser.add_argument("--total_steps", help="Max steps for a run", default=50000, type=int)
+parser.add_argument("--total_steps", help="Max steps for a run", default=20000, type=int)
 parser.add_argument("--runs", help="How many runs to do", default=10, type=int)
 parser.add_argument("--load_model", help="Load pretrained model", default="")
 parser.add_argument("--save_model", help="File name to save model", default="")
@@ -54,7 +54,7 @@ def define_config():
 	# parameter for dreamer
 	config.car_name = "ari_dreamer"
 	config.episodes_steps = 1000
-	config.episodes = 100
+	config.episodes = 1000
 
 	config.belief_size = 200
 	config.state_size = 30
@@ -74,7 +74,7 @@ def define_config():
 	config.actor_lr = 8e-5
 	config.value_lr = 8e-5
 	config.free_nats = 3
-	config.experience_size = 1000000
+	config.experience_size = 300000
 	config.bit_depth = 5
 	config.discount = 0.99
 	config.disclam = 0.95
@@ -106,8 +106,8 @@ def define_config():
 
 	# set up for experiments
 	config.pcont = False  # whether to use a learned pcont
-	config.with_logprob = False  # whether to use the soft actor-critic
-	config.fix_speed = True  # whether to use fixed speed, fixed speed is 0.3
+	config.with_logprob = True  # whether to use the soft actor-critic
+	config.fix_speed = True  # whether to use fixed speed, fixed speed equals to throttle_base
 
 	config.temp = 0.03  # entropy temperature
 	return config
@@ -464,5 +464,4 @@ if __name__ == "__main__":
 	# training_episodes += 1
 
 	time.sleep(0.1)
-
 
