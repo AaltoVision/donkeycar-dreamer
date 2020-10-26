@@ -142,28 +142,34 @@ class Dreamer(Agent):
     for p in self.target_value_model2.parameters():
       p.requires_grad = False
 
-      # setup the paras to update
-      self.world_param = list(self.transition_model.parameters())\
-                        + list(self.observation_model.parameters())\
-                        + list(self.reward_model.parameters())\
-                        + list(self.encoder.parameters())
-      if args.pcont:
-        self.world_param += list(self.pcont_model.parameters())
+    # setup the paras to update
+    self.world_param = list(self.transition_model.parameters())\
+                      + list(self.observation_model.parameters())\
+                      + list(self.reward_model.parameters())\
+                      + list(self.encoder.parameters())
+    if args.pcont:
+      self.world_param += list(self.pcont_model.parameters())
 
-      # setup optimizer
-      self.world_optimizer = optim.Adam(self.world_param, lr=args.world_lr)
-      self.actor_optimizer = optim.Adam(self.actor_model.parameters(), lr=args.actor_lr)
-      self.value_optimizer = optim.Adam(list(self.value_model.parameters())+list(self.value_model2.parameters()), lr=args.value_lr)
+    # setup optimizer
+    self.world_optimizer = optim.Adam(self.world_param, lr=args.world_lr)
+    self.actor_optimizer = optim.Adam(self.actor_model.parameters(), lr=args.actor_lr)
+    self.value_optimizer = optim.Adam(list(self.value_model.parameters())+list(self.value_model2.parameters()), lr=args.value_lr)
 
-      # setup the free_nat to
-      self.free_nats = torch.full((1, ), args.free_nats, dtype=torch.float32, device=args.device)  # Allowed deviation in KL divergence
+    # setup the free_nat to
+    self.free_nats = torch.full((1, ), args.free_nats, dtype=torch.float32, device=args.device)  # Allowed deviation in KL divergence
 
-      # TODO: change it to the new replay buffer, in buffer.py
-      self.D = ExperienceReplay(args.experience_size, args.symbolic, args.observation_size, args.action_size, args.bit_depth, args.device)
+    # TODO: change it to the new replay buffer, in buffer.py
+    self.D = ExperienceReplay(args.experience_size, args.symbolic, args.observation_size, args.action_size, args.bit_depth, args.device)
 
-      # TODO: print out the param used in Dreamer
-      # var_counts = tuple(count_vars(module) for module in [self., self.ac.q1, self.ac.q2])
-      # print('\nNumber of parameters: \t pi: %d, \t q1: %d, \t q2: %d\n' % var_counts)
+    if self.args.auto_temp:
+      # setup for learning of alpha term (temp of the entropy term)
+      self.log_temp = torch.zeros(1, requires_grad=True, device=args.device)
+      self.target_entropy = -np.prod(args.action_size if not args.fix_speed else self.args.action_size - 1).item()  # heuristic value from SAC paper
+      self.temp_optimizer = optim.Adam([self.log_temp], lr=args.value_lr) # use the same value_lr
+
+    # TODO: print out the param used in Dreamer
+    # var_counts = tuple(count_vars(module) for module in [self., self.ac.q1, self.ac.q2])
+    # print('\nNumber of parameters: \t pi: %d, \t q1: %d, \t q2: %d\n' % var_counts)
 
   # def process_im(self, image, image_size=None, rgb=None):
   #   # Resize, put channel first, convert it to a tensor, centre it to [-0.5, 0.5] and add batch dimenstion.
@@ -369,7 +375,15 @@ class Dreamer(Agent):
 
       # latent imagination
       imag_beliefs, imag_states, imag_ac_logps = self._latent_imagination(beliefs, posterior_states, with_logprob=self.args.with_logprob)
-      # print("imag_ac_logps", imag_ac_logps)
+
+      # update temp
+      if self.args.auto_temp:
+        temp_loss = - (self.log_temp * (imag_ac_logps[0] + self.target_entropy).detach()).mean()
+        self.temp_optimizer.zero_grad()
+        temp_loss.backward()
+        self.temp_optimizer.step()
+        self.args.temp = self.log_temp.exp()
+
       # update actor
       actor_loss = self._compute_loss_actor(imag_beliefs, imag_states, imag_ac_logps=imag_ac_logps)
 

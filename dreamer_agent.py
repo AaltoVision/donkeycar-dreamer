@@ -21,7 +21,7 @@ import torch
 
 parser = argparse.ArgumentParser()
 
-parser.add_argument("--car_name", help="Name of the car on MQTT-server", default="ari_dreamer")
+parser.add_argument("--car_name", help="Name of the car on MQTT-server", default="dreamer")
 parser.add_argument("--episode_steps", help="Number of steps per episode", default=1000, type=int)
 parser.add_argument("--episodes", help="Number of steps episodes per run", default=100, type=int)
 parser.add_argument("--encoder_update", help="Type of encoder to be used", default="aesac")
@@ -40,8 +40,8 @@ LOAD_MODEL = args.load_model
 SAVE_MODEL = args.save_model
 
 # DONKEY_NAME = args.car_name
-TRAINING_TIMEOUT = 300
-BLOCK_SIZE = 200
+TRAINING_TIMEOUT = 400
+BLOCK_SIZE = 300
 
 
 class AttrDict(dict):
@@ -52,7 +52,7 @@ class AttrDict(dict):
 def define_config():
 	config = AttrDict()
 	# parameter for dreamer
-	config.car_name = "ari_dreamer"
+	config.car_name = "dreamer"
 	config.episodes_steps = 1000
 	config.episodes = 1000
 
@@ -60,8 +60,8 @@ def define_config():
 	config.state_size = 30
 	config.hidden_size = 300
 	config.embedding_size = 1024
-	config.observation_size = (1, 40, 40)  # TODO: change this latter
-	config.action_size = 2  # TODO: change this latter
+	config.observation_size = (1, 40, 40)
+	config.action_size = 2
 	config.device = "cuda" if torch.cuda.is_available() else "cpu"
 	config.testing_device = "cpu"
 	config.symbolic = False
@@ -92,7 +92,7 @@ def define_config():
 	config.angle_min = -1
 	config.angle_max = 1
 	# I didn't limit the max steering_diff yet
-	config.max_steering_diff = 0.25
+	config.max_steering_diff = 0.25  # Not be used
 	config.step_length = 0.1
 
 	# add prefill episodes
@@ -100,15 +100,15 @@ def define_config():
 	config.random_episodes = 6
 	config.gradient_steps = 100
 	config.skip_initial_steps = 20
-	config.block_size = 200
+	config.block_size = 300
 
 	config.max_episodes_steps = config.episodes_steps + config.skip_initial_steps
 
 	# set up for experiments
-	config.pcont = False  # whether to use a learned pcont
+	config.pcont = True  # whether to use a learned pcont
 	config.with_logprob = True  # whether to use the soft actor-critic
 	config.fix_speed = True  # whether to use fixed speed, fixed speed equals to throttle_base
-
+	config.auto_temp = False  # whether to use fixed speed, fixed speed equals to throttle_base
 	config.temp = 0.03  # entropy temperature
 	return config
 
@@ -390,7 +390,7 @@ if __name__ == "__main__":
 	print("Starting as training server")
 	load_model = args.load_model
 	config = define_config()
-	agent = RL_Agent("ari_dreamer", True, args.car_name)  # TODO: remember to change to use sim or real car
+	agent = RL_Agent("dreamer", True, args.car_name)  # TODO: remember to change to use sim or real car
 
 	if args.load_model:
 		agent.agent = torch.load(args.load_model)

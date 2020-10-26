@@ -83,8 +83,8 @@ parser.add_argument('--port', type=int, default=9091, help='port to use for tcp'
 parser.add_argument('--host', type=str, default='127.0.0.1', help='host ip')
 # por sac
 parser.add_argument('--with_logprob', action='store_true')
-parser.add_argument('--use_automatic_entropy_tuning', action='store_true', help="Use the entropy regularization")
-parser.add_argument('--temp', type=float, default=0.03)  # temp for entropy
+parser.add_argument('--auto_temp', action='store_true', help="Use the entropy regularization")
+parser.add_argument('--temp', type=float, default=0.003)  # temp for entropy
 
 parser.add_argument('--action_size', default=2)
 parser.add_argument('--observation_size', default=(1, 40, 40))
