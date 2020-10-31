@@ -1,44 +1,26 @@
-Dreamer
+Learning to Drive Small Scale Cars from Scratch -- with Dreamer
 ======
 
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE.md)
 
-This is a Pytorch implementation of paper: [Dreamer to control: Learning Behaviors by Latent Imagination](https://danijar.com/project/dreamer/). **Get similar results compared with original Tensorflow implementation.** Tested on dm_control suite, with tasks cartpole-balance, cheetah-run, and ball-in-cup_catch. Testing on more tasks is ongoing.
+This code base contains the code to learn to drive a Donkey Car from image using model-based reinforcement learning. This approach follows the Dreamer algorithm, which learns a world model to predict future latent states, and learn policy and value function purely based on latent imagination. This implementation is able to learn to follow a track in 5 minutes of driving around on a track which corresponds to about 6000 samples from the environment.
 
-Requirements
-------------
+
+Core files
+models.py contains all model used in our experiments, including world model, actor model and value model. agent.py includes the dreamer agent. dreamer.py contains the code for using the agent to drive in the environment as well as training the agent.
+
+Running the code
+Install the required libraries:
 
 - Python 3
-- [DeepMind Control Suite](https://github.com/deepmind/dm_control)  
 - [Gym](https://gym.openai.com/)
 - [OpenCV Python](https://pypi.python.org/pypi/opencv-python)
 - [Plotly](https://plot.ly/)
 - [PyTorch >= v1.5.0](http://pytorch.org/)
+- [Donkeycar package](https://github.com/ari-viitala/RLDonkeyCar)
 
-To train the model:
-------------
-`python3 main.py --env [env-name]` 
 
-More optional environments are listed in `env.py` . The code is only tested on dm_control suite. If you have any question, feel free to post issues.
-
-## Some training results:
-
-- cartpole-balance
-
-  ![cartpole](./results/cartpole-balance/cartpole.png)
-
-- Cheetah-run
-
-  ![cheetah-run](./results/cheetah-run/cheetah.png)
-
-- Ball-in-cup_catch
-
-  ![ball-in-cup](./results/cup-catch/cup-catch.png)
-
-- Walker-walk
-
-  ![walker-walk](./results/walker-walk/walker.png)
-
+For running the experiments, please refers https://github.com/ari-viitala/donkeycar/tree/master.
 
 References:
 ------------
@@ -52,4 +34,6 @@ References:
 [4] [Learning Latent Dynamics for Planning from Pixels](https://arxiv.org/abs/1811.04551)  
 
 [5] PlaNet implementation from [@Kaixhin](https://github.com/Kaixhin) 
+
+[6] [Donkeycar](https://www.donkeycar.com/) 
 
