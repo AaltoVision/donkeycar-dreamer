@@ -3,11 +3,11 @@ Learning to Drive Small Scale Cars from Scratch -- with Dreamer
 
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE.md)
 
-This code base contains the code to learn to drive a Donkey Car from image using model-based reinforcement learning. This approach follows the Dreamer algorithm, which learns a world model to predict future latent states, and learn policy and value function purely based on latent imagination. This implementation is able to learn to follow a track in 5 minutes of driving around on a track which corresponds to about 6000 samples from the environment.
+This codebase contains the code to learn to drive a Donkey Car from images using model-based reinforcement learning. This approach follows the Dreamer algorithm, which learns a world model to predict future latent states, and learns policy and value function purely based on latent imagination. This implementation is able to learn to follow a track in 5 minutes of driving around on a track which corresponds to about 6000 samples from the environment.
 
 
 Core files
-`models.py` contains all model used in our experiments, including world model, actor model and value model. `agent.py` includes the dreamer agent. `dreamer.py` contains the code for using the agent to drive in the environment as well as training the agent.
+`models.py` contains all models used in our experiments, including the world model, actor model and value model. `agent.py` includes the dreamer agent. `dreamer.py` contains the code for using the agent to drive in the environment as well as training the agent.
 
 Running the code
 Install the required libraries:
